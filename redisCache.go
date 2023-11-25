@@ -45,6 +45,9 @@ func NewRedisCache(cacher *redis.Client, defaultDuration time.Duration) *RedisCa
 }
 
 func (c *RedisCache) SetCache(ctx context.Context, key string, item interface{}) error {
+	if c == nil {
+		return ErrCacheMiss
+	}
 	data, err := json.Marshal(item)
 	if err != nil {
 		return err
@@ -54,6 +57,9 @@ func (c *RedisCache) SetCache(ctx context.Context, key string, item interface{})
 }
 
 func (c *RedisCache) GetCache(ctx context.Context, key string) ([]byte, error) {
+	if c == nil {
+		return nil, ErrCacheMiss
+	}
 	return c.cacher.Get(ctx, key).Bytes()
 }
 

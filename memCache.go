@@ -38,6 +38,9 @@ func (c *MemCache) Ping(ctx context.Context) error {
 	return c.memcacheClient.Ping()
 }
 func (c *MemCache) SetCache(ctx context.Context, key string, item interface{}) error {
+	if c == nil {
+		return ErrCacheMiss
+	}
 	data, err := json.Marshal(item)
 	if err != nil {
 		return err
@@ -50,6 +53,9 @@ func (c *MemCache) SetCache(ctx context.Context, key string, item interface{}) e
 }
 
 func (c *MemCache) GetCache(ctx context.Context, key string) ([]byte, error) {
+	if c == nil {
+		return nil, ErrCacheMiss
+	}
 	it, err := c.memcacheClient.Get(key)
 	if errors.Is(err, memcache.ErrCacheMiss) {
 		return nil, ErrCacheMiss

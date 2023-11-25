@@ -40,11 +40,17 @@ func (c *GoCache) Ping(ctx context.Context) error {
 }
 
 func (c *GoCache) SetCache(ctx context.Context, key string, item interface{}) error {
+	if c == nil {
+		return ErrCacheMiss
+	}
 	c.cacher.Set(key, item, c.defaultDuration)
 	return nil
 }
 
 func (c *GoCache) GetCache(ctx context.Context, key string) ([]byte, error) {
+	if c == nil {
+		return nil, ErrCacheMiss
+	}
 	if data, found := c.cacher.Get(key); !found {
 		return nil, ErrCacheMiss
 	} else {

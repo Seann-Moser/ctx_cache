@@ -4,6 +4,8 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"github.com/patrickmn/go-cache"
+	"time"
 
 	"go.uber.org/multierr"
 )
@@ -70,13 +72,19 @@ func ContextWithCache(ctx context.Context, cache Cache) context.Context {
 
 func GetCacheFromContext(ctx context.Context) Cache {
 	if ctx == nil {
-		return &GoCache{}
+		return &GoCache{
+			defaultDuration: 0,
+			cacher:          cache.New(time.Minute, time.Minute),
+		}
 	}
-	cache := ctx.Value(CTX_CACHE)
-	if cache == nil {
-		return &GoCache{}
+	gCache := ctx.Value(CTX_CACHE)
+	if gCache == nil {
+		return &GoCache{
+			defaultDuration: time.Minute,
+			cacher:          cache.New(time.Minute, time.Minute),
+		}
 	}
-	return cache.(Cache)
+	return gCache.(Cache)
 }
 
 var _ Cache = &ctx_cache{}
@@ -86,7 +94,7 @@ type ctx_cache struct {
 	getter    GetCache
 }
 
-func Newctx_cache(setter GetCache, cacheList ...Cache) Cache {
+func NewTieredCache(setter GetCache, cacheList ...Cache) Cache {
 	return &ctx_cache{
 		cachePool: cacheList,
 		getter:    setter,

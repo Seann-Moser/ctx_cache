@@ -4,7 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
-	"github.com/bradfitz/gomemcache/memcache"
+	"github.com/orijtech/gomemcache/memcache"
 	"github.com/spf13/pflag"
 	"github.com/spf13/viper"
 	"time"
@@ -34,9 +34,14 @@ func NewMemcache(cacher *memcache.Client, defaultDuration time.Duration) *MemCac
 	}
 }
 
-func (c *MemCache) Ping(ctx context.Context) error {
-	return c.memcacheClient.Ping()
+func (c *MemCache) Close() {
+
 }
+
+func (c *MemCache) Ping(ctx context.Context) error {
+	return nil
+}
+
 func (c *MemCache) SetCache(ctx context.Context, key string, item interface{}) error {
 	if c == nil {
 		return ErrCacheMiss
@@ -45,7 +50,8 @@ func (c *MemCache) SetCache(ctx context.Context, key string, item interface{}) e
 	if err != nil {
 		return err
 	}
-	return c.memcacheClient.Set(&memcache.Item{
+
+	return c.memcacheClient.Set(ctx, &memcache.Item{
 		Key:        key,
 		Value:      data,
 		Expiration: int32(c.defaultDuration.Seconds()),
@@ -56,7 +62,7 @@ func (c *MemCache) GetCache(ctx context.Context, key string) ([]byte, error) {
 	if c == nil {
 		return nil, ErrCacheMiss
 	}
-	it, err := c.memcacheClient.Get(key)
+	it, err := c.memcacheClient.Get(ctx, key)
 	if errors.Is(err, memcache.ErrCacheMiss) {
 		return nil, ErrCacheMiss
 	}

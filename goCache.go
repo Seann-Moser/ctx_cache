@@ -39,6 +39,10 @@ func (c *GoCache) Ping(ctx context.Context) error {
 	return nil
 }
 
+func (c *GoCache) Close() {
+
+}
+
 func (c *GoCache) SetCache(ctx context.Context, key string, item interface{}) error {
 	if c == nil {
 		return ErrCacheMiss

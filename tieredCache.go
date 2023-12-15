@@ -17,6 +17,7 @@ var (
 type Cache interface {
 	SetCache
 	GetCache
+	DeleteKey(ctx context.Context, key string) error
 	Ping(ctx context.Context) error
 	Close()
 }
@@ -88,28 +89,43 @@ func GetCacheFromContext(ctx context.Context) Cache {
 	return gCache.(Cache)
 }
 
-var _ Cache = &ctx_cache{}
+var _ Cache = &TieredCache{}
 
-type ctx_cache struct {
+type TieredCache struct {
 	cachePool []Cache
 	getter    GetCache
 }
 
 func NewTieredCache(setter GetCache, cacheList ...Cache) Cache {
-	return &ctx_cache{
+	return &TieredCache{
 		cachePool: cacheList,
 		getter:    setter,
 	}
 }
-func (t *ctx_cache) Ping(ctx context.Context) error {
-	return nil
+
+func (t *TieredCache) DeleteKey(ctx context.Context, key string) error {
+	var err error
+	for _, c := range t.cachePool {
+		err = multierr.Combine(err, c.DeleteKey(ctx, key))
+	}
+	return err
 }
 
-func (t *ctx_cache) Close() {
-
+func (t *TieredCache) Ping(ctx context.Context) error {
+	var err error
+	for _, c := range t.cachePool {
+		err = multierr.Combine(err, c.Ping(ctx))
+	}
+	return err
 }
 
-func (t *ctx_cache) SetCache(ctx context.Context, key string, item interface{}) error {
+func (t *TieredCache) Close() {
+	for _, c := range t.cachePool {
+		c.Close()
+	}
+}
+
+func (t *TieredCache) SetCache(ctx context.Context, key string, item interface{}) error {
 	var err error
 	for _, c := range t.cachePool {
 		err = multierr.Combine(err, c.SetCache(ctx, key, item))
@@ -117,7 +133,7 @@ func (t *ctx_cache) SetCache(ctx context.Context, key string, item interface{}) 
 	return err
 }
 
-func (t *ctx_cache) GetCache(ctx context.Context, key string) ([]byte, error) {
+func (t *TieredCache) GetCache(ctx context.Context, key string) ([]byte, error) {
 	var missedCacheList []Cache
 	var v []byte
 	var err error

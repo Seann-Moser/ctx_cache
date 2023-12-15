@@ -44,7 +44,9 @@ func NewRedisCache(cacher *redis.Client, defaultDuration time.Duration) *RedisCa
 func (c *RedisCache) Close() {
 	_ = c.cacher.Close()
 }
-
+func (c *RedisCache) DeleteKey(ctx context.Context, key string) error {
+	return c.cacher.Del(key).Err()
+}
 func (c *RedisCache) SetCache(ctx context.Context, key string, item interface{}) error {
 	if c == nil {
 		return ErrCacheMiss

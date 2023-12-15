@@ -35,6 +35,11 @@ func NewGoCache(cacher *cache.Cache, defaultDuration time.Duration) *GoCache {
 	}
 }
 
+func (c *GoCache) DeleteKey(ctx context.Context, key string) error {
+	c.cacher.Delete(key)
+	return nil
+}
+
 func (c *GoCache) Ping(ctx context.Context) error {
 	return nil
 }

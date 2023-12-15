@@ -17,7 +17,7 @@ type cacheTestCase struct {
 	ExpectedErr    error
 }
 
-func Testctx_cache(t *testing.T) {
+func TestTieredCache(t *testing.T) {
 	testCases := []cacheTestCase{
 		{
 			Name:           "go cache",
@@ -37,7 +37,7 @@ func Testctx_cache(t *testing.T) {
 		},
 		{
 			Name:           "go cache tiered",
-			Cache:          Newctx_cache(nil, NewGoCache(cache.New(time.Minute, time.Minute), time.Minute)),
+			Cache:          NewTieredCache(nil, NewGoCache(cache.New(time.Minute, time.Minute), time.Minute)),
 			Key:            "test_cache_fail",
 			Value:          "",
 			ExpectedOutput: "",
@@ -45,7 +45,7 @@ func Testctx_cache(t *testing.T) {
 		},
 		{
 			Name:           "go cache tiered",
-			Cache:          Newctx_cache(nil, NewGoCache(cache.New(time.Minute, time.Minute), time.Minute)),
+			Cache:          NewTieredCache(nil, NewGoCache(cache.New(time.Minute, time.Minute), time.Minute)),
 			Key:            "test_cache",
 			Value:          "test",
 			ExpectedOutput: "test",

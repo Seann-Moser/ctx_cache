@@ -42,6 +42,10 @@ func (c *MemCache) Ping(ctx context.Context) error {
 	return nil
 }
 
+func (c *MemCache) DeleteKey(ctx context.Context, key string) error {
+	return c.memcacheClient.Delete(ctx, key)
+}
+
 func (c *MemCache) SetCache(ctx context.Context, key string, item interface{}) error {
 	if c == nil {
 		return ErrCacheMiss

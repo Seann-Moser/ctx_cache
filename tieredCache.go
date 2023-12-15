@@ -4,8 +4,9 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
-	"github.com/patrickmn/go-cache"
 	"time"
+
+	"github.com/patrickmn/go-cache"
 
 	"go.uber.org/multierr"
 )
@@ -77,6 +78,7 @@ func GetCacheFromContext(ctx context.Context) Cache {
 		return &GoCache{
 			defaultDuration: 0,
 			cacher:          cache.New(time.Minute, time.Minute),
+			cacheTags:       NewCacheTags("go-cache", "backup"),
 		}
 	}
 	gCache := ctx.Value(CTX_CACHE)
@@ -84,6 +86,7 @@ func GetCacheFromContext(ctx context.Context) Cache {
 		return &GoCache{
 			defaultDuration: time.Minute,
 			cacher:          cache.New(time.Minute, time.Minute),
+			cacheTags:       NewCacheTags("go-cache", "backup"),
 		}
 	}
 	return gCache.(Cache)

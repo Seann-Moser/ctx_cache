@@ -3,9 +3,10 @@ package ctx_cache
 import (
 	"context"
 	"errors"
-	"github.com/patrickmn/go-cache"
 	"testing"
 	"time"
+
+	"github.com/patrickmn/go-cache"
 )
 
 type cacheTestCase struct {
@@ -21,7 +22,7 @@ func TestTieredCache(t *testing.T) {
 	testCases := []cacheTestCase{
 		{
 			Name:           "go cache",
-			Cache:          NewGoCache(cache.New(time.Minute, time.Minute), time.Minute),
+			Cache:          NewGoCache(cache.New(time.Minute, time.Minute), time.Minute, ""),
 			Key:            "test_cache",
 			Value:          "test",
 			ExpectedOutput: "test",
@@ -29,7 +30,7 @@ func TestTieredCache(t *testing.T) {
 		},
 		{
 			Name:           "go cache",
-			Cache:          NewGoCache(cache.New(time.Minute, time.Minute), time.Minute),
+			Cache:          NewGoCache(cache.New(time.Minute, time.Minute), time.Minute, ""),
 			Key:            "test_cache_fail",
 			Value:          "",
 			ExpectedOutput: "",
@@ -37,7 +38,7 @@ func TestTieredCache(t *testing.T) {
 		},
 		{
 			Name:           "go cache tiered",
-			Cache:          NewTieredCache(nil, NewGoCache(cache.New(time.Minute, time.Minute), time.Minute)),
+			Cache:          NewTieredCache(nil, NewGoCache(cache.New(time.Minute, time.Minute), time.Minute, "")),
 			Key:            "test_cache_fail",
 			Value:          "",
 			ExpectedOutput: "",
@@ -45,7 +46,7 @@ func TestTieredCache(t *testing.T) {
 		},
 		{
 			Name:           "go cache tiered",
-			Cache:          NewTieredCache(nil, NewGoCache(cache.New(time.Minute, time.Minute), time.Minute)),
+			Cache:          NewTieredCache(nil, NewGoCache(cache.New(time.Minute, time.Minute), time.Minute, "")),
 			Key:            "test_cache",
 			Value:          "test",
 			ExpectedOutput: "test",

@@ -3,10 +3,12 @@ package ctx_cache
 import (
 	"context"
 	"encoding/json"
+	"errors"
+	"time"
+
 	redis "github.com/Seann-Moser/ociredis"
 	"github.com/spf13/pflag"
 	"github.com/spf13/viper"
-	"time"
 )
 
 var _ Cache = &RedisCache{}
@@ -14,13 +16,14 @@ var _ Cache = &RedisCache{}
 type RedisCache struct {
 	cacher          *redis.Client
 	defaultDuration time.Duration
+	cacheTags       CacheTags
 }
 
 func RedisFlags(prefix string) *pflag.FlagSet {
 	fs := pflag.NewFlagSet(prefix+"redis", pflag.ExitOnError)
 	fs.String(prefix+"redis-addr", "", "")
 	fs.String(prefix+"redis-pass", "", "")
-
+	fs.String(prefix+"redis-instance", "default", "")
 	fs.Duration(prefix+"redis-cleanup-duration", 1*time.Minute, "")
 
 	return fs
@@ -32,13 +35,15 @@ func NewRedisCacheFromFlags(ctx context.Context, prefix string) *RedisCache {
 		Context:  ctx,
 	})
 
-	return NewRedisCache(rdb, viper.GetDuration(prefix+"redis-cleanup-duration"))
+	return NewRedisCache(rdb, viper.GetDuration(prefix+"redis-cleanup-duration"), viper.GetString(prefix+"redis-instance"))
 }
 
-func NewRedisCache(cacher *redis.Client, defaultDuration time.Duration) *RedisCache {
+func NewRedisCache(cacher *redis.Client, defaultDuration time.Duration, instance string) *RedisCache {
+
 	return &RedisCache{
 		cacher:          cacher,
 		defaultDuration: defaultDuration,
+		cacheTags:       NewCacheTags("redis", instance),
 	}
 }
 func (c *RedisCache) Close() {
@@ -48,25 +53,57 @@ func (c *RedisCache) DeleteKey(ctx context.Context, key string) error {
 	return c.cacher.Del(key).Err()
 }
 func (c *RedisCache) SetCache(ctx context.Context, key string, item interface{}) error {
-	if c == nil {
-		return ErrCacheMiss
-	}
+	var cacheErr error
+	s := c.cacheTags.record(ctx, CacheCmdSET, func(err error) CacheStatus {
+		if errors.Is(err, ErrCacheMiss) {
+			return CacheStatusMISSING
+		}
+		if err != nil {
+			return CacheStatusERR
+		}
+		return CacheStatusOK
+	})
+	defer func() {
+		s(cacheErr)
+	}()
+
 	data, err := json.Marshal(item)
 	if err != nil {
+		cacheErr = ErrCacheMiss
 		return err
 	}
 	localClient := c.cacher.WithContext(ctx)
 	stats := localClient.Set(key, data, c.defaultDuration)
+	cacheErr = stats.Err()
 	return stats.Err()
 }
 
 func (c *RedisCache) GetCache(ctx context.Context, key string) ([]byte, error) {
-	if c == nil {
+	var cacheErr error
+	s := c.cacheTags.record(ctx, CacheCmdGET, func(err error) CacheStatus {
+		if errors.Is(err, ErrCacheMiss) {
+			return CacheStatusMISSING
+		}
+		if err != nil {
+			return CacheStatusERR
+		}
+		return CacheStatusFOUND
+	})
+	defer func() {
+		s(cacheErr)
+	}()
+
+	localClient := c.cacher.WithContext(ctx)
+	data, err := localClient.Get(key).Bytes()
+	if err != nil {
+		cacheErr = err
+		return nil, err
+	}
+	if len(data) == 0 {
+		cacheErr = ErrCacheMiss
 		return nil, ErrCacheMiss
 	}
-	localClient := c.cacher.WithContext(ctx)
-
-	return localClient.Get(key).Bytes()
+	return data, nil
 }
 
 func (c *RedisCache) Ping(ctx context.Context) error {

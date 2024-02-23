@@ -49,10 +49,11 @@ func NewRedisCache(cacher *redis.Client, defaultDuration time.Duration, instance
 func (c *RedisCache) Close() {
 	_ = c.cacher.Close()
 }
+
 func (c *RedisCache) DeleteKey(ctx context.Context, key string) error {
 	return c.cacher.Del(key).Err()
 }
-func (c *RedisCache) SetCache(ctx context.Context, key string, item interface{}) error {
+func (c *RedisCache) SetCacheWithExpiration(ctx context.Context, cacheTimeout time.Duration, key string, item interface{}) error {
 	var cacheErr error
 	s := c.cacheTags.record(ctx, CacheCmdSET, func(err error) CacheStatus {
 		if errors.Is(err, ErrCacheMiss) {
@@ -73,9 +74,13 @@ func (c *RedisCache) SetCache(ctx context.Context, key string, item interface{})
 		return err
 	}
 	localClient := c.cacher.WithContext(ctx)
-	stats := localClient.Set(key, data, c.defaultDuration)
+	stats := localClient.Set(key, data, cacheTimeout)
 	cacheErr = stats.Err()
 	return stats.Err()
+}
+
+func (c *RedisCache) SetCache(ctx context.Context, key string, item interface{}) error {
+	return c.SetCacheWithExpiration(ctx, c.defaultDuration, key, item)
 }
 
 func (c *RedisCache) GetCache(ctx context.Context, key string) ([]byte, error) {

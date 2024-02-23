@@ -50,6 +50,10 @@ func (c *MemCache) DeleteKey(ctx context.Context, key string) error {
 }
 
 func (c *MemCache) SetCache(ctx context.Context, key string, item interface{}) error {
+	return c.SetCacheWithExpiration(ctx, c.defaultDuration, key, item)
+}
+
+func (c *MemCache) SetCacheWithExpiration(ctx context.Context, cacheTimeout time.Duration, key string, item interface{}) error {
 	var cacheErr error
 	s := c.cacheTags.record(ctx, CacheCmdSET, func(err error) CacheStatus {
 		if errors.Is(err, ErrCacheMiss) {
@@ -71,7 +75,7 @@ func (c *MemCache) SetCache(ctx context.Context, key string, item interface{}) e
 	cacheErr = c.memcacheClient.Set(ctx, &memcache.Item{
 		Key:        key,
 		Value:      data,
-		Expiration: int32(c.defaultDuration.Seconds()),
+		Expiration: int32(cacheTimeout.Seconds()),
 	})
 	return cacheErr
 }

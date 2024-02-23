@@ -51,8 +51,7 @@ func (c *GoCache) Ping(ctx context.Context) error {
 func (c *GoCache) Close() {
 
 }
-
-func (c *GoCache) SetCache(ctx context.Context, key string, item interface{}) error {
+func (c *GoCache) SetCacheWithExpiration(ctx context.Context, cacheTimeout time.Duration, key string, item interface{}) error {
 	var err error
 	s := c.cacheTags.record(ctx, CacheCmdSET, func(err error) CacheStatus {
 		if errors.Is(err, ErrCacheMiss) {
@@ -68,8 +67,12 @@ func (c *GoCache) SetCache(ctx context.Context, key string, item interface{}) er
 		s(err)
 	}()
 
-	c.cacher.Set(key, item, c.defaultDuration)
+	c.cacher.Set(key, item, cacheTimeout)
 	return nil
+}
+
+func (c *GoCache) SetCache(ctx context.Context, key string, item interface{}) error {
+	return c.SetCacheWithExpiration(ctx, c.defaultDuration, key, item)
 }
 
 func (c *GoCache) GetCache(ctx context.Context, key string) ([]byte, error) {

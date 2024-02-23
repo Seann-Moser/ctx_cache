@@ -25,6 +25,7 @@ type Cache interface {
 
 type SetCache interface {
 	SetCache(ctx context.Context, key string, item interface{}) error
+	SetCacheWithExpiration(ctx context.Context, cacheTimeout time.Duration, key string, item interface{}) error
 }
 
 type GetCache interface {
@@ -35,7 +36,14 @@ func Set[T any](ctx context.Context, key string, data T) error {
 	return GetCacheFromContext(ctx).SetCache(ctx, key, data)
 }
 
+func SetWithExpiration[T any](ctx context.Context, cacheTimeout time.Duration, key string, data T) error {
+	return GetCacheFromContext(ctx).SetCache(ctx, key, data)
+}
+
 func SetFromCache[T any](ctx context.Context, cache Cache, key string, data T) error {
+	return cache.SetCache(ctx, key, data)
+}
+func SetFromCacheWithExpiration[T any](ctx context.Context, cache Cache, cacheTimeout time.Duration, key string, data T) error {
 	return cache.SetCache(ctx, key, data)
 }
 
@@ -97,6 +105,14 @@ var _ Cache = &TieredCache{}
 type TieredCache struct {
 	cachePool []Cache
 	getter    GetCache
+}
+
+func (t *TieredCache) SetCacheWithExpiration(ctx context.Context, cacheTimeout time.Duration, key string, item interface{}) error {
+	var err error
+	for _, c := range t.cachePool {
+		err = multierr.Combine(err, c.SetCacheWithExpiration(ctx, cacheTimeout, key, item))
+	}
+	return err
 }
 
 func NewTieredCache(setter GetCache, cacheList ...Cache) Cache {

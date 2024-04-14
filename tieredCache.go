@@ -4,6 +4,8 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
+	"reflect"
 	"time"
 
 	"github.com/patrickmn/go-cache"
@@ -32,23 +34,45 @@ type GetCache interface {
 	GetCache(ctx context.Context, key string) ([]byte, error)
 }
 
+func getType(myVar interface{}) string {
+	if myVar == nil {
+		return "nil"
+	}
+	t := reflect.TypeOf(myVar)
+	if t.Kind() == reflect.Ptr {
+		if t.Elem().Kind() == reflect.Struct {
+			return t.Elem().Name()
+		}
+		return t.Elem().String()
+	} else {
+		if t.Elem().Kind() == reflect.Struct {
+			return t.Elem().Name()
+		}
+		return t.String()
+	}
+}
+func GetKey[T any](key string) string {
+	var d T
+	return fmt.Sprintf("%s_%s", getType(d), key)
+}
+
 func Set[T any](ctx context.Context, key string, data T) error {
-	return GetCacheFromContext(ctx).SetCache(ctx, key, data)
+	return GetCacheFromContext(ctx).SetCache(ctx, GetKey[T](key), data)
 }
 
 func SetWithExpiration[T any](ctx context.Context, cacheTimeout time.Duration, key string, data T) error {
-	return GetCacheFromContext(ctx).SetCache(ctx, key, data)
+	return GetCacheFromContext(ctx).SetCacheWithExpiration(ctx, cacheTimeout, GetKey[T](key), data)
 }
 
 func SetFromCache[T any](ctx context.Context, cache Cache, key string, data T) error {
-	return cache.SetCache(ctx, key, data)
+	return cache.SetCache(ctx, GetKey[T](key), data)
 }
 func SetFromCacheWithExpiration[T any](ctx context.Context, cache Cache, cacheTimeout time.Duration, key string, data T) error {
-	return cache.SetCache(ctx, key, data)
+	return cache.SetCacheWithExpiration(ctx, cacheTimeout, GetKey[T](key), data)
 }
 
 func Get[T any](ctx context.Context, key string) (*T, error) {
-	data, err := GetCacheFromContext(ctx).GetCache(ctx, key)
+	data, err := GetCacheFromContext(ctx).GetCache(ctx, GetKey[T](key))
 	if err != nil {
 		return nil, err
 	}
@@ -61,7 +85,7 @@ func Get[T any](ctx context.Context, key string) (*T, error) {
 }
 
 func GetFromCache[T any](ctx context.Context, cache Cache, key string) (*T, error) {
-	data, err := cache.GetCache(ctx, key)
+	data, err := cache.GetCache(ctx, GetKey[T](key))
 	if err != nil {
 		return nil, err
 	}

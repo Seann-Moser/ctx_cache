@@ -47,8 +47,8 @@ func getType(myVar interface{}) string {
 		}
 		return t.Elem().String()
 	} else {
-		if t.Elem().Kind() == reflect.Struct {
-			return t.Elem().Name()
+		if t.Kind() == reflect.Struct {
+			return t.Name()
 		}
 		return t.String()
 	}

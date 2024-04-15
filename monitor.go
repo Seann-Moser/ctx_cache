@@ -2,12 +2,12 @@ package ctx_cache
 
 import (
 	"context"
+	"errors"
 	"sync"
 	"time"
 )
 
 var MonitorCache CacheMonitor = &TableCacheResetMock{}
-
 
 func SetGlobalCacheMonitor(monitor CacheMonitor) {
 	if MonitorCache.IsActive() {
@@ -22,7 +22,6 @@ type CacheMonitor interface {
 	Start(ctx context.Context)
 	IsActive() bool
 }
-
 
 type TableCacheResetMock struct {
 }
@@ -42,8 +41,6 @@ func (t TableCacheResetMock) CacheTable(tableName string, key string) {
 func (t TableCacheResetMock) Start(ctx context.Context) {
 
 }
-
-
 
 type TableCacheReset struct {
 	tableNameSignal chan string
@@ -98,7 +95,7 @@ func (r *TableCacheReset) Start(ctx context.Context) {
 					cache := GetCacheFromContext(ctx)
 					for table, cacheKeys := range r.TableCache {
 						for key, _ := range cacheKeys {
-							if _, err := cache.GetCache(ctx, key); err == ErrCacheMiss {
+							if _, err := cache.GetCache(ctx, key); errors.Is(err, ErrCacheMiss) {
 								r.syncMutex.Lock()
 								delete(r.TableCache[table], key)
 								r.syncMutex.Unlock()

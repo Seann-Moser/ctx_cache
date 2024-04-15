@@ -22,13 +22,13 @@ type GoCache struct {
 
 func GoCacheFlags(prefix string) *pflag.FlagSet {
 	fs := pflag.NewFlagSet(prefix+"gocache", pflag.ExitOnError)
-	fs.Duration(prefix+"gocache-default-duration", 1*time.Minute, "")
+	fs.Duration(prefix+"gocache-default-duration", 5*time.Minute, "")
 	fs.Duration(prefix+"gocache-cleanup-duration", 1*time.Minute, "")
 
 	return fs
 }
 func NewGoCacheFromFlags(prefix string) *GoCache {
-	return NewGoCache(cache.New(viper.GetDuration(prefix+"gocache-cleanup-duration"), viper.GetDuration(prefix+"memcache-default-duration")), viper.GetDuration(prefix+"memcache-default-duration"), prefix)
+	return NewGoCache(cache.New(viper.GetDuration(prefix+"gocache-cleanup-duration"), viper.GetDuration(prefix+"gocache-default-duration")), viper.GetDuration(prefix+"gocache-default-duration"), prefix)
 }
 
 func NewGoCache(cacher *cache.Cache, defaultDuration time.Duration, instance string) *GoCache {

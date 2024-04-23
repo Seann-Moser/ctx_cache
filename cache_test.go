@@ -13,6 +13,7 @@ type cacheTestCase struct {
 	Name           string
 	Cache          Cache
 	Key            string
+	Group          string
 	Value          string
 	ExpectedOutput string
 	ExpectedErr    error
@@ -45,23 +46,26 @@ func TestTieredCache(t *testing.T) {
 			ExpectedErr:    ErrCacheMiss,
 		},
 		{
-			Name:           "go cache tiered",
-			Cache:          NewTieredCache(nil, NewGoCache(cache.New(time.Minute, time.Minute), time.Minute, "")),
-			Key:            "test_cache",
-			Value:          "test",
+			Name:  "go cache tiered",
+			Cache: NewTieredCache(nil, NewGoCache(cache.New(time.Minute, time.Minute), time.Minute, "")),
+			Key:   "test_cache",
+			Value: "test",
+
 			ExpectedOutput: "test",
 		},
 	}
+	GlobalCacheMonitor = NewMonitor()
+	ctx := context.Background()
 	for _, tc := range testCases {
 		t.Run(tc.Name, func(t *testing.T) {
 			if tc.Value != "" {
-				err := tc.Cache.SetCache(context.Background(), tc.Key, tc.Value)
+				err := tc.Cache.SetCache(ctx, tc.Group, tc.Key, tc.Value)
 				if err != nil {
 					t.Errorf("failed setting cache:%s", err.Error())
 					return
 				}
 			}
-			value, err := tc.Cache.GetCache(context.Background(), tc.Key)
+			value, err := tc.Cache.GetCache(ctx, tc.Group, tc.Key)
 			if err != nil && !errors.Is(err, tc.ExpectedErr) {
 				t.Errorf("failed getting cache:%s", err.Error())
 				return
@@ -71,6 +75,12 @@ func TestTieredCache(t *testing.T) {
 			}
 			if string(value) != tc.ExpectedOutput {
 				t.Errorf("does not match expected output: %s != %s", tc.ExpectedOutput, string(value))
+			}
+
+			err = Set[string](ctx, tc.Group, tc.Key, tc.Value)
+			if err != nil {
+				t.Errorf("failed setting cache:%s", err.Error())
+				return
 			}
 
 		})

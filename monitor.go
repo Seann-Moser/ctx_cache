@@ -2,125 +2,122 @@ package ctx_cache
 
 import (
 	"context"
-	"errors"
+	"fmt"
+	"go.uber.org/multierr"
 	"sync"
 	"time"
 )
 
-var MonitorCache CacheMonitor = &TableCacheResetMock{}
+var GlobalCacheMonitor CacheMonitor = NewMonitor()
 
-func SetGlobalCacheMonitor(monitor CacheMonitor) {
-	if MonitorCache.IsActive() {
-		return
-	}
-	MonitorCache = monitor
-}
+const GroupPrefix = "[CTX_CACHE_GROUP]"
 
 type CacheMonitor interface {
-	PublishUpdate(ctx context.Context, group string)
-	CacheTable(group string, key string)
-	Start(ctx context.Context)
-	IsActive() bool
+	AddGroupKeys(ctx context.Context, group string, newKeys ...string) error
+	HasGroupKeyBeenUpdated(ctx context.Context, group string) bool
+	GetGroupKeys(ctx context.Context, group string) (map[string]struct{}, error)
+	DeleteCache(ctx context.Context, group string) error
+	UpdateCache(ctx context.Context, group string, key string) error
 }
 
-type TableCacheResetMock struct {
+type CacheMonitorImpl struct {
+	cleanDuration time.Duration
+	Mutex         *sync.RWMutex
+	groupKeys     map[string]time.Time
 }
 
-func (t TableCacheResetMock) IsActive() bool {
-	return false
-}
-
-func (t TableCacheResetMock) PublishUpdate(ctx context.Context, tableName string) {
-
-}
-
-func (t TableCacheResetMock) CacheTable(tableName string, key string) {
-
-}
-
-func (t TableCacheResetMock) Start(ctx context.Context) {
-
-}
-
-type TableCacheReset struct {
-	tableNameSignal chan string
-	syncMutex       *sync.RWMutex
-	TableCache      map[string]map[string]struct{}
-	running         bool
-}
-
-func NewTableCacheReset() *TableCacheReset {
-	return &TableCacheReset{
-		tableNameSignal: make(chan string, 100),
-		syncMutex:       &sync.RWMutex{},
-		TableCache:      map[string]map[string]struct{}{},
-		running:         false,
+func NewMonitor() CacheMonitor {
+	return &CacheMonitorImpl{
+		cleanDuration: time.Minute,
+		groupKeys:     make(map[string]time.Time),
+		Mutex:         &sync.RWMutex{},
 	}
 }
 
-func (r *TableCacheReset) PublishUpdate(ctx context.Context, tableName string) {
-	if r.running {
-		tick := time.NewTicker(5 * time.Second)
-		select {
-		case <-ctx.Done():
-			return
-		case <-tick.C:
-			return
-		case r.tableNameSignal <- tableName:
-			return
+func (c *CacheMonitorImpl) UpdateCache(ctx context.Context, group string, key string) error {
+	err := c.AddGroupKeys(ctx, group, key)
+	if err != nil {
+		return err
+	}
+	now := time.Now()
+	groupKey := fmt.Sprintf("%s_%s_updated", GroupPrefix, group)
+	err = SetWithExpiration[int64](ctx, 60*time.Minute, GroupPrefix, groupKey, now.Unix())
+	if err != nil {
+		return err
+	}
+	c.Mutex.Lock()
+	c.groupKeys[groupKey] = now
+	c.Mutex.Unlock()
+	return nil
+}
+
+func (c *CacheMonitorImpl) DeleteCache(ctx context.Context, group string) error {
+	keys, err := c.GetGroupKeys(ctx, group)
+	if err != nil {
+		return err
+	}
+	for k, _ := range keys {
+		err = multierr.Combine(err, DeleteKey(ctx, k))
+	}
+	return err
+}
+
+func (c *CacheMonitorImpl) GetGroupKeys(ctx context.Context, group string) (map[string]struct{}, error) {
+	key := fmt.Sprintf("%s_%s_keys", GroupPrefix, group)
+	keys, err := Get[map[string]struct{}](ctx, GroupPrefix, key)
+	var foundKeys map[string]struct{}
+	if err != nil {
+		return nil, err
+	} else {
+		foundKeys = *keys
+	}
+	return foundKeys, nil
+}
+
+func (c *CacheMonitorImpl) AddGroupKeys(ctx context.Context, group string, newKeys ...string) error {
+	key := fmt.Sprintf("%s_%s_keys", GroupPrefix, group)
+	keys, err := Get[map[string]struct{}](ctx, GroupPrefix, key)
+	var foundKeys map[string]struct{}
+	if err != nil {
+		foundKeys = map[string]struct{}{}
+	} else {
+		foundKeys = *keys
+	}
+	for _, k := range newKeys {
+		foundKeys[k] = struct{}{}
+	}
+	return SetWithExpiration[map[string]struct{}](ctx, 60*time.Minute, GroupPrefix, key, foundKeys)
+}
+
+// HasGroupKeyBeenUpdated is the time does not match then the key value has been updated, if it has been updated invalidate all cache
+func (c *CacheMonitorImpl) HasGroupKeyBeenUpdated(ctx context.Context, group string) bool {
+	if group == GroupPrefix {
+		return false
+	}
+	//todo check all caches to verify they are all the same value
+	key := fmt.Sprintf("%s_%s_updated", GroupPrefix, group)
+	lastUpdated, err := Get[int64](ctx, GroupPrefix, key)
+	if err != nil {
+		err = SetWithExpiration[int64](ctx, 60*time.Minute, GroupPrefix, key, time.Now().Unix())
+		if err != nil {
+			return true
+		}
+		return true
+	}
+	for _, c := range GetCacheFromContext(ctx).GetParentCaches() {
+		i, err := GetFromCache[int64](ctx, c, GroupPrefix, key)
+		if err != nil || *i != *lastUpdated {
+			return true
 		}
 	}
-}
-
-func (r *TableCacheReset) CacheTable(tableName string, key string) {
-	r.syncMutex.Lock()
-	if _, found := r.TableCache[tableName]; !found {
-		r.TableCache[tableName] = map[string]struct{}{}
+	c.Mutex.RLock()
+	if v, found := c.groupKeys[key]; found && v.Equal(time.Unix(*lastUpdated, 0)) {
+		c.Mutex.RUnlock()
+		return false
 	}
-	r.TableCache[tableName][key] = struct{}{}
-	r.syncMutex.Unlock()
-}
-
-func (r *TableCacheReset) Start(ctx context.Context) {
-	go func() {
-		tick := time.NewTicker(5 * time.Minute)
-		r.running = true
-		defer func() { r.running = false }()
-		for {
-			select {
-			case <-ctx.Done():
-				return
-			case <-tick.C:
-				go func() {
-					cache := GetCacheFromContext(ctx)
-					for table, cacheKeys := range r.TableCache {
-						for key, _ := range cacheKeys {
-							if _, err := cache.GetCache(ctx, key); errors.Is(err, ErrCacheMiss) {
-								r.syncMutex.Lock()
-								delete(r.TableCache[table], key)
-								r.syncMutex.Unlock()
-							}
-						}
-					}
-				}()
-			case v, ok := <-r.tableNameSignal:
-				if !ok {
-					return
-				}
-				cache := GetCacheFromContext(ctx)
-				r.syncMutex.Lock()
-				for key, _ := range r.TableCache[v] {
-					_ = cache.DeleteKey(ctx, key)
-				}
-				//todo add to cache so other instances can ref
-				delete(r.TableCache[v], v)
-				r.syncMutex.Unlock()
-			}
-		}
-	}()
-
-}
-
-func (r *TableCacheReset) IsActive() bool {
-	return r.running
+	c.Mutex.RUnlock()
+	c.Mutex.Lock()
+	c.groupKeys[key] = time.Unix(*lastUpdated, 0)
+	c.Mutex.Unlock()
+	return true
 }

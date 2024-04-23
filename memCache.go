@@ -19,6 +19,10 @@ type MemCache struct {
 	cacheTags       CacheTags
 }
 
+func (c *MemCache) GetParentCaches() map[string]Cache {
+	return map[string]Cache{}
+}
+
 func MemcacheFlags(prefix string) *pflag.FlagSet {
 	fs := pflag.NewFlagSet(prefix+"memcache", pflag.ExitOnError)
 	fs.StringSlice(prefix+"memcache-addrs", []string{}, "")
@@ -49,11 +53,11 @@ func (c *MemCache) DeleteKey(ctx context.Context, key string) error {
 	return c.memcacheClient.Delete(ctx, key)
 }
 
-func (c *MemCache) SetCache(ctx context.Context, key string, item interface{}) error {
-	return c.SetCacheWithExpiration(ctx, c.defaultDuration, key, item)
+func (c *MemCache) SetCache(ctx context.Context, group, key string, item interface{}) error {
+	return c.SetCacheWithExpiration(ctx, c.defaultDuration, group, key, item)
 }
 
-func (c *MemCache) SetCacheWithExpiration(ctx context.Context, cacheTimeout time.Duration, key string, item interface{}) error {
+func (c *MemCache) SetCacheWithExpiration(ctx context.Context, cacheTimeout time.Duration, group, key string, item interface{}) error {
 	var cacheErr error
 	s := c.cacheTags.record(ctx, CacheCmdSET, func(err error) CacheStatus {
 		if errors.Is(err, ErrCacheMiss) {
@@ -80,7 +84,7 @@ func (c *MemCache) SetCacheWithExpiration(ctx context.Context, cacheTimeout time
 	return cacheErr
 }
 
-func (c *MemCache) GetCache(ctx context.Context, key string) ([]byte, error) {
+func (c *MemCache) GetCache(ctx context.Context, group, key string) ([]byte, error) {
 	var cacheErr error
 	s := c.cacheTags.record(ctx, CacheCmdGET, func(err error) CacheStatus {
 		if errors.Is(err, ErrCacheMiss) {

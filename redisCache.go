@@ -19,6 +19,10 @@ type RedisCache struct {
 	cacheTags       CacheTags
 }
 
+func (c *RedisCache) GetParentCaches() map[string]Cache {
+	return map[string]Cache{}
+}
+
 func RedisFlags(prefix string) *pflag.FlagSet {
 	fs := pflag.NewFlagSet(prefix+"redis", pflag.ExitOnError)
 	fs.String(prefix+"redis-addr", "", "")
@@ -53,7 +57,7 @@ func (c *RedisCache) Close() {
 func (c *RedisCache) DeleteKey(ctx context.Context, key string) error {
 	return c.cacher.Del(key).Err()
 }
-func (c *RedisCache) SetCacheWithExpiration(ctx context.Context, cacheTimeout time.Duration, key string, item interface{}) error {
+func (c *RedisCache) SetCacheWithExpiration(ctx context.Context, cacheTimeout time.Duration, group, key string, item interface{}) error {
 	var cacheErr error
 	s := c.cacheTags.record(ctx, CacheCmdSET, func(err error) CacheStatus {
 		if errors.Is(err, ErrCacheMiss) {
@@ -79,11 +83,11 @@ func (c *RedisCache) SetCacheWithExpiration(ctx context.Context, cacheTimeout ti
 	return stats.Err()
 }
 
-func (c *RedisCache) SetCache(ctx context.Context, key string, item interface{}) error {
-	return c.SetCacheWithExpiration(ctx, c.defaultDuration, key, item)
+func (c *RedisCache) SetCache(ctx context.Context, group, key string, item interface{}) error {
+	return c.SetCacheWithExpiration(ctx, c.defaultDuration, group, key, item)
 }
 
-func (c *RedisCache) GetCache(ctx context.Context, key string) ([]byte, error) {
+func (c *RedisCache) GetCache(ctx context.Context, group, key string) ([]byte, error) {
 	var cacheErr error
 	s := c.cacheTags.record(ctx, CacheCmdGET, func(err error) CacheStatus {
 		if errors.Is(err, ErrCacheMiss) {

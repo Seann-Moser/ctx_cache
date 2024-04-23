@@ -20,6 +20,10 @@ type GoCache struct {
 	cacheTags       CacheTags
 }
 
+func (c *GoCache) GetParentCaches() map[string]Cache {
+	return map[string]Cache{}
+}
+
 func GoCacheFlags(prefix string) *pflag.FlagSet {
 	fs := pflag.NewFlagSet(prefix+"gocache", pflag.ExitOnError)
 	fs.Duration(prefix+"gocache-default-duration", 5*time.Minute, "")
@@ -51,7 +55,7 @@ func (c *GoCache) Ping(ctx context.Context) error {
 func (c *GoCache) Close() {
 
 }
-func (c *GoCache) SetCacheWithExpiration(ctx context.Context, cacheTimeout time.Duration, key string, item interface{}) error {
+func (c *GoCache) SetCacheWithExpiration(ctx context.Context, cacheTimeout time.Duration, group, key string, item interface{}) error {
 	var err error
 	s := c.cacheTags.record(ctx, CacheCmdSET, func(err error) CacheStatus {
 		if errors.Is(err, ErrCacheMiss) {
@@ -71,11 +75,11 @@ func (c *GoCache) SetCacheWithExpiration(ctx context.Context, cacheTimeout time.
 	return nil
 }
 
-func (c *GoCache) SetCache(ctx context.Context, key string, item interface{}) error {
-	return c.SetCacheWithExpiration(ctx, c.defaultDuration, key, item)
+func (c *GoCache) SetCache(ctx context.Context, group, key string, item interface{}) error {
+	return c.SetCacheWithExpiration(ctx, c.defaultDuration, group, key, item)
 }
 
-func (c *GoCache) GetCache(ctx context.Context, key string) ([]byte, error) {
+func (c *GoCache) GetCache(ctx context.Context, group, key string) ([]byte, error) {
 	var cacheErr error
 	s := c.cacheTags.record(ctx, CacheCmdGET, func(err error) CacheStatus {
 		if errors.Is(err, ErrCacheMiss) {

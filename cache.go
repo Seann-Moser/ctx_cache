@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"github.com/patrickmn/go-cache"
 	"reflect"
+	"strings"
 	"time"
 )
 
@@ -25,15 +26,16 @@ type Cache interface {
 	DeleteKey(ctx context.Context, key string) error
 	Ping(ctx context.Context) error
 	Close()
+	GetParentCaches() map[string]Cache
 }
 
 type SetCache interface {
-	SetCache(ctx context.Context, key string, item interface{}) error
-	SetCacheWithExpiration(ctx context.Context, cacheTimeout time.Duration, key string, item interface{}) error
+	SetCache(ctx context.Context, group, key string, item interface{}) error
+	SetCacheWithExpiration(ctx context.Context, cacheTimeout time.Duration, group, key string, item interface{}) error
 }
 
 type GetCache interface {
-	GetCache(ctx context.Context, key string) ([]byte, error)
+	GetCache(ctx context.Context, group, key string) ([]byte, error)
 }
 
 func getType(myVar interface{}) string {
@@ -53,28 +55,53 @@ func getType(myVar interface{}) string {
 		return t.String()
 	}
 }
-func GetKey[T any](key string) string {
+func GetKey[T any](key ...string) string {
 	var d T
-	return fmt.Sprintf("%s_%s", getType(d), key)
+	return fmt.Sprintf("%s_%s", getType(d), strings.Join(key, "_"))
 }
 
-func Set[T any](ctx context.Context, key string, data T) error {
-	return GetCacheFromContext(ctx).SetCache(ctx, GetKey[T](key), data)
+func Set[T any](ctx context.Context, group, key string, data T) error {
+	err := GetCacheFromContext(ctx).SetCache(ctx, group, GetKey[T](group, key), data)
+	if err != nil {
+		return err
+	}
+	if strings.EqualFold(group, GroupPrefix) {
+		return nil
+	}
+	return GlobalCacheMonitor.UpdateCache(ctx, group, key)
 }
 
-func SetWithExpiration[T any](ctx context.Context, cacheTimeout time.Duration, key string, data T) error {
-	return GetCacheFromContext(ctx).SetCacheWithExpiration(ctx, cacheTimeout, GetKey[T](key), data)
+func Delete[T any](ctx context.Context, group, key string) error {
+	return GetCacheFromContext(ctx).DeleteKey(ctx, GetKey[T](group, key))
 }
 
-func SetFromCache[T any](ctx context.Context, cache Cache, key string, data T) error {
-	return cache.SetCache(ctx, GetKey[T](key), data)
-}
-func SetFromCacheWithExpiration[T any](ctx context.Context, cache Cache, cacheTimeout time.Duration, key string, data T) error {
-	return cache.SetCacheWithExpiration(ctx, cacheTimeout, GetKey[T](key), data)
+func DeleteKey(ctx context.Context, key string) error {
+	return GetCacheFromContext(ctx).DeleteKey(ctx, key)
 }
 
-func Get[T any](ctx context.Context, key string) (*T, error) {
-	data, err := GetCacheFromContext(ctx).GetCache(ctx, GetKey[T](key))
+func SetWithExpiration[T any](ctx context.Context, cacheTimeout time.Duration, group, key string, data T) error {
+	err := GetCacheFromContext(ctx).SetCacheWithExpiration(ctx, cacheTimeout, group, GetKey[T](group, key), data)
+	if err != nil {
+		return err
+	}
+	if strings.EqualFold(group, GroupPrefix) {
+		return nil
+	}
+	return GlobalCacheMonitor.UpdateCache(ctx, group, key)
+}
+
+func SetFromCache[T any](ctx context.Context, cache Cache, group, key string, data T) error {
+	return cache.SetCache(ctx, group, GetKey[T](group, key), data)
+}
+func SetFromCacheWithExpiration[T any](ctx context.Context, cache Cache, cacheTimeout time.Duration, group, key string, data T) error {
+	return cache.SetCacheWithExpiration(ctx, cacheTimeout, group, GetKey[T](group, key), data)
+}
+
+func Get[T any](ctx context.Context, group, key string) (*T, error) {
+	if GlobalCacheMonitor.HasGroupKeyBeenUpdated(ctx, group) {
+		return nil, ErrCacheMiss
+	}
+	data, err := GetCacheFromContext(ctx).GetCache(ctx, group, GetKey[T](group, key))
 	if err != nil {
 		return nil, err
 	}
@@ -86,8 +113,11 @@ func Get[T any](ctx context.Context, key string) (*T, error) {
 	return &output, nil
 }
 
-func GetFromCache[T any](ctx context.Context, cache Cache, key string) (*T, error) {
-	data, err := cache.GetCache(ctx, GetKey[T](key))
+func GetFromCache[T any](ctx context.Context, cache Cache, group, key string) (*T, error) {
+	if GlobalCacheMonitor.HasGroupKeyBeenUpdated(ctx, group) {
+		return nil, ErrCacheMiss
+	}
+	data, err := cache.GetCache(ctx, group, GetKey[T](group, key))
 	if err != nil {
 		return nil, err
 	}

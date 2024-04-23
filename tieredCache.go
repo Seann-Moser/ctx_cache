@@ -2,6 +2,7 @@ package ctx_cache
 
 import (
 	"context"
+	"strconv"
 	"time"
 
 	"go.uber.org/multierr"
@@ -14,6 +15,14 @@ type TieredCache struct {
 	getter    GetCache
 }
 
+func (t *TieredCache) GetParentCaches() map[string]Cache {
+	data := map[string]Cache{}
+	for i, cache := range t.cachePool {
+		data[strconv.FormatInt(int64(i), 10)] = cache
+	}
+	return data
+}
+
 func NewTieredCache(setter GetCache, cacheList ...Cache) Cache {
 	return &TieredCache{
 		cachePool: cacheList,
@@ -21,10 +30,10 @@ func NewTieredCache(setter GetCache, cacheList ...Cache) Cache {
 	}
 }
 
-func (t *TieredCache) SetCacheWithExpiration(ctx context.Context, cacheTimeout time.Duration, key string, item interface{}) error {
+func (t *TieredCache) SetCacheWithExpiration(ctx context.Context, cacheTimeout time.Duration, group, key string, item interface{}) error {
 	var err error
 	for _, c := range t.cachePool {
-		err = multierr.Combine(err, c.SetCacheWithExpiration(ctx, cacheTimeout, key, item))
+		err = multierr.Combine(err, c.SetCacheWithExpiration(ctx, cacheTimeout, group, key, item))
 	}
 	return err
 }
@@ -51,25 +60,25 @@ func (t *TieredCache) Close() {
 	}
 }
 
-func (t *TieredCache) SetCache(ctx context.Context, key string, item interface{}) error {
+func (t *TieredCache) SetCache(ctx context.Context, group, key string, item interface{}) error {
 	var err error
 	for _, c := range t.cachePool {
-		err = multierr.Combine(err, c.SetCache(ctx, key, item))
+		err = multierr.Combine(err, c.SetCache(ctx, group, key, item))
 	}
 	return err
 }
 
-func (t *TieredCache) GetCache(ctx context.Context, key string) ([]byte, error) {
+func (t *TieredCache) GetCache(ctx context.Context, group, key string) ([]byte, error) {
 	var missedCacheList []Cache
 	var v []byte
 	var err error
 	defer func() {
 		for _, c := range missedCacheList {
-			_ = c.SetCache(ctx, key, v)
+			_ = c.SetCache(ctx, group, key, v)
 		}
 	}()
 	for _, c := range t.cachePool {
-		v, err = c.GetCache(ctx, key)
+		v, err = c.GetCache(ctx, group, key)
 		if err != nil || v == nil {
 			missedCacheList = append(missedCacheList, c)
 			continue
@@ -79,7 +88,7 @@ func (t *TieredCache) GetCache(ctx context.Context, key string) ([]byte, error) 
 	if t.getter == nil {
 		return nil, ErrCacheMiss
 	}
-	v, err = t.getter.GetCache(ctx, key)
+	v, err = t.getter.GetCache(ctx, group, key)
 	if err != nil {
 		missedCacheList = []Cache{}
 		return nil, err

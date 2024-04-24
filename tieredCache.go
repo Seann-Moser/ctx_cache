@@ -17,6 +17,9 @@ type TieredCache struct {
 
 func (t *TieredCache) GetParentCaches() map[string]Cache {
 	data := map[string]Cache{}
+	if len(t.cachePool) <= 1 {
+		return data
+	}
 	for i, cache := range t.cachePool {
 		data[strconv.FormatInt(int64(i), 10)] = cache
 	}

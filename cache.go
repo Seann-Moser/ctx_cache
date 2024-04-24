@@ -5,9 +5,12 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/Seann-Moser/go-serve/pkg/ctxLogger"
 	"github.com/patrickmn/go-cache"
+	"go.uber.org/zap"
 	"reflect"
 	"strings"
+	"sync"
 	"time"
 )
 
@@ -18,6 +21,7 @@ const (
 var (
 	ErrCacheMiss = errors.New("cache missed")
 	DefaultCache Cache
+	SyncMutex    = sync.RWMutex{}
 )
 
 type Cache interface {
@@ -82,11 +86,13 @@ func DeleteKey(ctx context.Context, key string) error {
 func SetWithExpiration[T any](ctx context.Context, cacheTimeout time.Duration, group, key string, data T) error {
 	err := GetCacheFromContext(ctx).SetCacheWithExpiration(ctx, cacheTimeout, group, GetKey[T](group, key), data)
 	if err != nil {
+		ctxLogger.Debug(ctx, "failed setting cache", zap.String("group", group), zap.String("key", key))
 		return err
 	}
 	if strings.EqualFold(group, GroupPrefix) {
 		return nil
 	}
+	ctxLogger.Debug(ctx, "set cache", zap.String("group", group), zap.String("key", key))
 	return GlobalCacheMonitor.UpdateCache(ctx, group, key)
 }
 
@@ -99,6 +105,7 @@ func SetFromCacheWithExpiration[T any](ctx context.Context, cache Cache, cacheTi
 
 func Get[T any](ctx context.Context, group, key string) (*T, error) {
 	if GlobalCacheMonitor.HasGroupKeyBeenUpdated(ctx, group) {
+		ctxLogger.Debug(ctx, "group has been updated", zap.String("group", group), zap.String("key", key))
 		return nil, ErrCacheMiss
 	}
 	data, err := GetCacheFromContext(ctx).GetCache(ctx, group, GetKey[T](group, key))
@@ -110,6 +117,7 @@ func Get[T any](ctx context.Context, group, key string) (*T, error) {
 	if err != nil {
 		return nil, err
 	}
+	ctxLogger.Debug(ctx, "using cache", zap.String("group", group), zap.String("key", key))
 	return &output, nil
 }
 

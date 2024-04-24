@@ -3,7 +3,9 @@ package ctx_cache
 import (
 	"context"
 	"fmt"
+	"github.com/Seann-Moser/go-serve/pkg/ctxLogger"
 	"go.uber.org/multierr"
+	"go.uber.org/zap"
 	"sync"
 	"time"
 )
@@ -45,6 +47,7 @@ func (c *CacheMonitorImpl) UpdateCache(ctx context.Context, group string, key st
 	if err != nil {
 		return err
 	}
+	ctxLogger.Debug(ctx, "setting cache", zap.String("group", group), zap.String("key", key))
 	c.Mutex.Lock()
 	c.groupKeys[groupKey] = now
 	c.Mutex.Unlock()
@@ -104,19 +107,20 @@ func (c *CacheMonitorImpl) HasGroupKeyBeenUpdated(ctx context.Context, group str
 		}
 		return true
 	}
+	ctxLogger.Debug(ctx, "last updated", zap.Int64("lastUpdated", *lastUpdated))
 	for _, c := range GetCacheFromContext(ctx).GetParentCaches() {
 		i, err := GetFromCache[int64](ctx, c, GroupPrefix, key)
 		if err != nil || *i != *lastUpdated {
+			ctxLogger.Debug(ctx, "last updated does not match", zap.Int64("lastUpdated", *lastUpdated), zap.Int64("cache", i))
 			return true
 		}
 	}
-	c.Mutex.RLock()
+	c.Mutex.Lock()
 	if v, found := c.groupKeys[key]; found && v.Equal(time.Unix(*lastUpdated, 0)) {
-		c.Mutex.RUnlock()
+		c.Mutex.Unlock()
+		ctxLogger.Debug(ctx, "last updated does not match", zap.Time("group_key", v), zap.Time("last_updated", time.Unix(*lastUpdated, 0)))
 		return false
 	}
-	c.Mutex.RUnlock()
-	c.Mutex.Lock()
 	c.groupKeys[key] = time.Unix(*lastUpdated, 0)
 	c.Mutex.Unlock()
 	return true

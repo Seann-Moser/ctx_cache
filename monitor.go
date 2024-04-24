@@ -59,7 +59,7 @@ func (c *CacheMonitorImpl) DeleteCache(ctx context.Context, group string) error 
 	if err != nil {
 		return err
 	}
-	for k, _ := range keys {
+	for k := range keys {
 		err = multierr.Combine(err, DeleteKey(ctx, k))
 	}
 	return err
@@ -111,7 +111,9 @@ func (c *CacheMonitorImpl) HasGroupKeyBeenUpdated(ctx context.Context, group str
 	for _, c := range GetCacheFromContext(ctx).GetParentCaches() {
 		i, err := GetFromCache[int64](ctx, c, GroupPrefix, key)
 		if err != nil || *i != *lastUpdated {
-			ctxLogger.Debug(ctx, "last updated does not match", zap.Int64("lastUpdated", *lastUpdated), zap.Int64("cache", i))
+			if i != nil {
+				ctxLogger.Debug(ctx, "last updated does not match", zap.Int64("lastUpdated", *lastUpdated), zap.Int64("cache", *i))
+			}
 			return true
 		}
 	}

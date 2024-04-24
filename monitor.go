@@ -25,13 +25,13 @@ type CacheMonitor interface {
 type CacheMonitorImpl struct {
 	cleanDuration time.Duration
 	Mutex         *sync.RWMutex
-	groupKeys     map[string]time.Time
+	groupKeys     map[string]int64
 }
 
 func NewMonitor() CacheMonitor {
 	return &CacheMonitorImpl{
 		cleanDuration: time.Minute,
-		groupKeys:     make(map[string]time.Time),
+		groupKeys:     make(map[string]int64),
 		Mutex:         &sync.RWMutex{},
 	}
 }
@@ -43,14 +43,14 @@ func (c *CacheMonitorImpl) UpdateCache(ctx context.Context, group string, key st
 	}
 	now := time.Now()
 	groupKey := fmt.Sprintf("%s_%s_updated", GroupPrefix, group)
+	c.Mutex.Lock()
+	defer c.Mutex.Unlock()
+	c.groupKeys[groupKey] = now.Unix()
 	err = SetWithExpiration[int64](ctx, 60*time.Minute, GroupPrefix, groupKey, now.Unix())
 	if err != nil {
 		return err
 	}
 	ctxLogger.Debug(ctx, "setting cache", zap.String("group", group), zap.String("key", key))
-	c.Mutex.Lock()
-	c.groupKeys[groupKey] = now
-	c.Mutex.Unlock()
 	return nil
 }
 
@@ -101,29 +101,30 @@ func (c *CacheMonitorImpl) HasGroupKeyBeenUpdated(ctx context.Context, group str
 	key := fmt.Sprintf("%s_%s_updated", GroupPrefix, group)
 	lastUpdated, err := Get[int64](ctx, GroupPrefix, key)
 	if err != nil {
+		ctxLogger.Debug(ctx, "failed getting last updated group", zap.Error(err))
 		err = SetWithExpiration[int64](ctx, 60*time.Minute, GroupPrefix, key, time.Now().Unix())
 		if err != nil {
 			return true
 		}
 		return true
 	}
-	ctxLogger.Debug(ctx, "last updated", zap.Int64("lastUpdated", *lastUpdated))
 	for _, c := range GetCacheFromContext(ctx).GetParentCaches() {
 		i, err := GetFromCache[int64](ctx, c, GroupPrefix, key)
 		if err != nil || *i != *lastUpdated {
 			if i != nil {
-				ctxLogger.Debug(ctx, "last updated does not match", zap.Int64("lastUpdated", *lastUpdated), zap.Int64("cache", *i))
+				ctxLogger.Debug(ctx, "last updated does not match", zap.Int64("lastUpdated", *lastUpdated), zap.Int64("cache", *i), zap.Error(err))
 			}
 			return true
 		}
 	}
 	c.Mutex.Lock()
-	if v, found := c.groupKeys[key]; found && v.Equal(time.Unix(*lastUpdated, 0)) {
+	if v, found := c.groupKeys[key]; found && v == *lastUpdated {
 		c.Mutex.Unlock()
-		ctxLogger.Debug(ctx, "last updated does not match", zap.Time("group_key", v), zap.Time("last_updated", time.Unix(*lastUpdated, 0)))
 		return false
+	} else {
+		ctxLogger.Debug(ctx, "last updated does not match group", zap.Int64("group_key", v), zap.Int64("last_updated", *lastUpdated))
 	}
-	c.groupKeys[key] = time.Unix(*lastUpdated, 0)
+	c.groupKeys[key] = *lastUpdated
 	c.Mutex.Unlock()
 	return true
 }

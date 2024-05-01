@@ -78,10 +78,13 @@ func (c *CacheMonitorImpl) GetGroupKeys(ctx context.Context, group string) (map[
 }
 
 func (c *CacheMonitorImpl) AddGroupKeys(ctx context.Context, group string, newKeys ...string) error {
+	if len(newKeys) == 0 {
+		return nil
+	}
 	key := fmt.Sprintf("%s_%s_keys", GroupPrefix, group)
 	keys, err := Get[map[string]struct{}](ctx, GroupPrefix, key)
 	var foundKeys map[string]struct{}
-	if err != nil {
+	if err != nil || keys == nil {
 		foundKeys = map[string]struct{}{}
 	} else {
 		foundKeys = *keys

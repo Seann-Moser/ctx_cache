@@ -66,7 +66,7 @@ func GetKey[T any](key ...string) string {
 }
 
 func Set[T any](ctx context.Context, group, key string, data T) error {
-	err := GetCacheFromContext(ctx).SetCache(ctx, group, GetKey[T](group, key), data)
+	err := GetCacheFromContext(ctx).SetCache(ctx, group, GetKey[T](group, key), Wrapper[T]{Data: data})
 	if err != nil {
 		return err
 	}
@@ -85,7 +85,7 @@ func DeleteKey(ctx context.Context, key string) error {
 }
 
 func SetWithExpiration[T any](ctx context.Context, cacheTimeout time.Duration, group, key string, data T) error {
-	err := GetCacheFromContext(ctx).SetCacheWithExpiration(ctx, cacheTimeout, group, GetKey[T](group, key), data)
+	err := GetCacheFromContext(ctx).SetCacheWithExpiration(ctx, cacheTimeout, group, GetKey[T](group, key), Wrapper[T]{Data: data})
 	if err != nil {
 		ctxLogger.Debug(ctx, "failed setting cache", zap.String("group", group), zap.String("key", key))
 		return err
@@ -98,10 +98,14 @@ func SetWithExpiration[T any](ctx context.Context, cacheTimeout time.Duration, g
 }
 
 func SetFromCache[T any](ctx context.Context, cache Cache, group, key string, data T) error {
-	return cache.SetCache(ctx, group, GetKey[T](group, key), data)
+	return cache.SetCache(ctx, group, GetKey[T](group, key), Wrapper[T]{Data: data})
 }
 func SetFromCacheWithExpiration[T any](ctx context.Context, cache Cache, cacheTimeout time.Duration, group, key string, data T) error {
-	return cache.SetCacheWithExpiration(ctx, cacheTimeout, group, GetKey[T](group, key), data)
+	return cache.SetCacheWithExpiration(ctx, cacheTimeout, group, GetKey[T](group, key), Wrapper[T]{Data: data})
+}
+
+type Wrapper[T any] struct {
+	Data T `json:"data"`
 }
 
 func Get[T any](ctx context.Context, group, key string) (*T, error) {
@@ -113,24 +117,28 @@ func Get[T any](ctx context.Context, group, key string) (*T, error) {
 	if err != nil {
 		return nil, err
 	}
-	var output T
+
+	var output Wrapper[T]
 	err = json.Unmarshal(data, &output)
 	if err != nil {
 		return nil, err
 	}
 	ctxLogger.Debug(ctx, "using cache", zap.String("group", group), zap.String("key", key))
-	return &output, nil
+	return &output.Data, nil
 }
 
 func GetSet[T any](ctx context.Context, cacheTimeout time.Duration, group, key string, gtr func(ctx context.Context) (T, error)) (T, error) {
 	if v, err := Get[T](ctx, group, key); errors.Is(err, ErrCacheMiss) || v == nil {
+		if err != nil && !errors.Is(err, ErrCacheMiss) {
+			var tmp T
+			return tmp, err
+		}
 		nv, err := gtr(ctx)
 		if err != nil {
 			var tmp T
 			return tmp, err
 		}
-		_ = SetWithExpiration[T](ctx, cacheTimeout, group, key, nv)
-		return nv, nil
+		return nv, SetWithExpiration[T](ctx, cacheTimeout, group, key, nv)
 	} else {
 		return *v, nil
 	}
@@ -144,12 +152,12 @@ func GetFromCache[T any](ctx context.Context, cache Cache, group, key string) (*
 	if err != nil {
 		return nil, err
 	}
-	var output T
+	var output Wrapper[T]
 	err = json.Unmarshal(data, &output)
 	if err != nil {
 		return nil, err
 	}
-	return &output, nil
+	return &output.Data, nil
 }
 
 func ContextWithCache(ctx context.Context, cache Cache) context.Context {

@@ -2,6 +2,8 @@ package ctx_cache
 
 import (
 	"context"
+	"crypto/md5"
+	"encoding/base64"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -60,9 +62,15 @@ func getType(myVar interface{}) string {
 		return t.String()
 	}
 }
+
+func GetMD5Hash(text string) string {
+	hash := md5.Sum([]byte(text))
+	return base64.StdEncoding.EncodeToString(hash[:])
+}
+
 func GetKey[T any](key ...string) string {
 	var d T
-	return fmt.Sprintf("%s_%s", getType(d), strings.Join(key, "_"))
+	return GetMD5Hash(fmt.Sprintf("%s_%s", getType(d), strings.Join(key, "_")))
 }
 
 func Set[T any](ctx context.Context, group, key string, data T) error {
@@ -141,6 +149,20 @@ func GetSet[T any](ctx context.Context, cacheTimeout time.Duration, group, key s
 		return nv, SetWithExpiration[T](ctx, cacheTimeout, group, key, nv)
 	} else {
 		return *v, nil
+	}
+}
+func GetSetP[T any](ctx context.Context, cacheTimeout time.Duration, group, key string, gtr func(ctx context.Context) (*T, error)) (*T, error) {
+	if v, err := Get[T](ctx, group, key); errors.Is(err, ErrCacheMiss) || v == nil {
+		if err != nil && !errors.Is(err, ErrCacheMiss) {
+			return nil, err
+		}
+		nv, err := gtr(ctx)
+		if err != nil {
+			return nil, err
+		}
+		return nv, SetWithExpiration[T](ctx, cacheTimeout, group, key, *nv)
+	} else {
+		return v, nil
 	}
 }
 

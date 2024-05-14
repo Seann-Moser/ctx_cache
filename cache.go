@@ -142,7 +142,8 @@ func GetSet[T any](ctx context.Context, cacheTimeout time.Duration, group, key s
 			var tmp T
 			return tmp, err
 		}
-		return nv, SetWithExpiration[T](ctx, cacheTimeout, group, key, nv)
+		_ = SetWithExpiration[T](ctx, cacheTimeout, group, key, nv)
+		return nv, nil
 	} else {
 		return *v, nil
 	}
@@ -156,7 +157,8 @@ func GetSetP[T any](ctx context.Context, cacheTimeout time.Duration, group, key 
 		if nv == nil {
 			return nil, nil
 		}
-		return nv, SetWithExpiration[T](ctx, cacheTimeout, group, key, *nv)
+		_ = SetWithExpiration[T](ctx, cacheTimeout, group, key, *nv)
+		return nv, nil
 	} else {
 		return v, nil
 	}

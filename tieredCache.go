@@ -35,16 +35,32 @@ func NewTieredCache(setter GetCache, cacheList ...Cache) Cache {
 
 func (t *TieredCache) SetCacheWithExpiration(ctx context.Context, cacheTimeout time.Duration, group, key string, item interface{}) error {
 	var err error
+	var success bool
 	for _, c := range t.cachePool {
-		err = multierr.Combine(err, c.SetCacheWithExpiration(ctx, cacheTimeout, group, key, item))
+		if e := c.SetCacheWithExpiration(ctx, cacheTimeout, group, key, item); e == nil {
+			success = true
+		} else {
+			err = multierr.Combine(err, e)
+		}
+	}
+	if success {
+		return nil
 	}
 	return err
 }
 
 func (t *TieredCache) DeleteKey(ctx context.Context, key string) error {
 	var err error
+	var success bool
 	for _, c := range t.cachePool {
-		err = multierr.Combine(err, c.DeleteKey(ctx, key))
+		if e := c.DeleteKey(ctx, key); e == nil {
+			success = true
+		} else {
+			err = multierr.Combine(err, e)
+		}
+	}
+	if success {
+		return nil
 	}
 	return err
 }
@@ -65,8 +81,16 @@ func (t *TieredCache) Close() {
 
 func (t *TieredCache) SetCache(ctx context.Context, group, key string, item interface{}) error {
 	var err error
+	var success bool
 	for _, c := range t.cachePool {
-		err = multierr.Combine(err, c.SetCache(ctx, group, key, item))
+		if e := c.SetCache(ctx, group, key, item); e == nil {
+			success = true
+		} else {
+			err = multierr.Combine(err, e)
+		}
+	}
+	if success {
+		return nil
 	}
 	return err
 }

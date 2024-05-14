@@ -17,6 +17,7 @@ type MemCache struct {
 	memcacheClient  *memcache.Client
 	defaultDuration time.Duration
 	cacheTags       CacheTags
+	enabled         bool
 }
 
 func (c *MemCache) GetParentCaches() map[string]Cache {
@@ -26,18 +27,20 @@ func (c *MemCache) GetParentCaches() map[string]Cache {
 func MemcacheFlags(prefix string) *pflag.FlagSet {
 	fs := pflag.NewFlagSet(prefix+"memcache", pflag.ExitOnError)
 	fs.StringSlice(prefix+"memcache-addrs", []string{}, "")
+	fs.Bool(prefix+"memcache-enabled", false, "")
 	fs.Duration(prefix+"memcache-default-duration", 1*time.Minute, "")
 	return fs
 }
 func NewMemcacheFromFlags(prefix string) *MemCache {
-	return NewMemcache(memcache.New(viper.GetStringSlice(prefix+"memcache-addrs")...), viper.GetDuration(prefix+"memcache-default-duration"), prefix)
+	return NewMemcache(memcache.New(viper.GetStringSlice(prefix+"memcache-addrs")...), viper.GetDuration(prefix+"memcache-default-duration"), prefix, viper.GetBool(prefix+"memcache-enabled"))
 }
 
-func NewMemcache(cacher *memcache.Client, defaultDuration time.Duration, instance string) *MemCache {
+func NewMemcache(cacher *memcache.Client, defaultDuration time.Duration, instance string, enabled bool) *MemCache {
 	return &MemCache{
 		memcacheClient:  cacher,
 		defaultDuration: defaultDuration,
 		cacheTags:       NewCacheTags("memcache", instance),
+		enabled:         enabled,
 	}
 }
 
@@ -50,14 +53,23 @@ func (c *MemCache) Ping(ctx context.Context) error {
 }
 
 func (c *MemCache) DeleteKey(ctx context.Context, key string) error {
+	if !c.enabled {
+		return nil
+	}
 	return c.memcacheClient.Delete(ctx, key)
 }
 
 func (c *MemCache) SetCache(ctx context.Context, group, key string, item interface{}) error {
+	if !c.enabled {
+		return nil
+	}
 	return c.SetCacheWithExpiration(ctx, c.defaultDuration, group, key, item)
 }
 
 func (c *MemCache) SetCacheWithExpiration(ctx context.Context, cacheTimeout time.Duration, group, key string, item interface{}) error {
+	if !c.enabled {
+		return nil
+	}
 	var cacheErr error
 	s := c.cacheTags.record(ctx, CacheCmdSET, func(err error) CacheStatus {
 		if errors.Is(err, ErrCacheMiss) {
@@ -85,6 +97,9 @@ func (c *MemCache) SetCacheWithExpiration(ctx context.Context, cacheTimeout time
 }
 
 func (c *MemCache) GetCache(ctx context.Context, group, key string) ([]byte, error) {
+	if !c.enabled {
+		return nil, ErrCacheMiss
+	}
 	var cacheErr error
 	s := c.cacheTags.record(ctx, CacheCmdGET, func(err error) CacheStatus {
 		if errors.Is(err, ErrCacheMiss) {

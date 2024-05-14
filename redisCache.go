@@ -17,6 +17,7 @@ type RedisCache struct {
 	cacher          *redis.Client
 	defaultDuration time.Duration
 	cacheTags       CacheTags
+	enabled         bool
 }
 
 func (c *RedisCache) GetParentCaches() map[string]Cache {
@@ -27,6 +28,7 @@ func RedisFlags(prefix string) *pflag.FlagSet {
 	fs := pflag.NewFlagSet(prefix+"redis", pflag.ExitOnError)
 	fs.String(prefix+"redis-addr", "", "")
 	fs.String(prefix+"redis-pass", "", "")
+	fs.Bool(prefix+"redis-enabled", false, "")
 	fs.String(prefix+"redis-instance", "default", "")
 	fs.Duration(prefix+"redis-cleanup-duration", 1*time.Minute, "")
 
@@ -39,15 +41,16 @@ func NewRedisCacheFromFlags(ctx context.Context, prefix string) *RedisCache {
 		Context:  ctx,
 	})
 
-	return NewRedisCache(rdb, viper.GetDuration(prefix+"redis-cleanup-duration"), viper.GetString(prefix+"redis-instance"))
+	return NewRedisCache(rdb, viper.GetDuration(prefix+"redis-cleanup-duration"), viper.GetString(prefix+"redis-instance"), viper.GetBool(prefix+"redis-enabled"))
 }
 
-func NewRedisCache(cacher *redis.Client, defaultDuration time.Duration, instance string) *RedisCache {
+func NewRedisCache(cacher *redis.Client, defaultDuration time.Duration, instance string, enabled bool) *RedisCache {
 
 	return &RedisCache{
 		cacher:          cacher,
 		defaultDuration: defaultDuration,
 		cacheTags:       NewCacheTags("redis", instance),
+		enabled:         enabled,
 	}
 }
 func (c *RedisCache) Close() {

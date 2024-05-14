@@ -3,11 +3,12 @@ package ctx_cache
 import (
 	"context"
 	"fmt"
+	"sync"
+	"time"
+
 	"github.com/Seann-Moser/go-serve/pkg/ctxLogger"
 	"go.uber.org/multierr"
 	"go.uber.org/zap"
-	"sync"
-	"time"
 )
 
 var GlobalCacheMonitor CacheMonitor = NewMonitor()
@@ -100,7 +101,6 @@ func (c *CacheMonitorImpl) HasGroupKeyBeenUpdated(ctx context.Context, group str
 	if group == GroupPrefix {
 		return false
 	}
-	//todo check all caches to verify they are all the same value
 	key := fmt.Sprintf("%s_%s_updated", GroupPrefix, group)
 	lastUpdated, err := Get[int64](ctx, GroupPrefix, key)
 	if err != nil {

@@ -62,7 +62,7 @@ func TestMonitor(t *testing.T) {
 				}
 
 			}
-
+			_ = GlobalCacheMonitor.DeleteCache(ctx, "default")
 		}()
 	}
 

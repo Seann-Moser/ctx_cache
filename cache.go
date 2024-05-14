@@ -137,10 +137,6 @@ func Get[T any](ctx context.Context, group, key string) (*T, error) {
 
 func GetSet[T any](ctx context.Context, cacheTimeout time.Duration, group, key string, gtr func(ctx context.Context) (T, error)) (T, error) {
 	if v, err := Get[T](ctx, group, key); errors.Is(err, ErrCacheMiss) || v == nil {
-		if err != nil && !errors.Is(err, ErrCacheMiss) {
-			var tmp T
-			return tmp, err
-		}
 		nv, err := gtr(ctx)
 		if err != nil {
 			var tmp T
@@ -153,12 +149,12 @@ func GetSet[T any](ctx context.Context, cacheTimeout time.Duration, group, key s
 }
 func GetSetP[T any](ctx context.Context, cacheTimeout time.Duration, group, key string, gtr func(ctx context.Context) (*T, error)) (*T, error) {
 	if v, err := Get[T](ctx, group, key); errors.Is(err, ErrCacheMiss) || v == nil {
-		if err != nil && !errors.Is(err, ErrCacheMiss) {
-			return nil, err
-		}
 		nv, err := gtr(ctx)
 		if err != nil {
 			return nil, err
+		}
+		if nv == nil {
+			return nil, nil
 		}
 		return nv, SetWithExpiration[T](ctx, cacheTimeout, group, key, *nv)
 	} else {

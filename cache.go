@@ -5,13 +5,14 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"github.com/Seann-Moser/go-serve/pkg/ctxLogger"
-	"github.com/patrickmn/go-cache"
-	"go.uber.org/zap"
 	"reflect"
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/Seann-Moser/go-serve/pkg/ctxLogger"
+	"github.com/patrickmn/go-cache"
+	"go.uber.org/zap"
 )
 
 const (
@@ -104,7 +105,7 @@ func SetFromCacheWithExpiration[T any](ctx context.Context, cache Cache, cacheTi
 }
 
 func Get[T any](ctx context.Context, group, key string) (*T, error) {
-	if GlobalCacheMonitor.HasGroupKeyBeenUpdated(ctx, group) {
+	if group != "" && GlobalCacheMonitor.HasGroupKeyBeenUpdated(ctx, group) {
 		ctxLogger.Debug(ctx, "group has been updated", zap.String("group", group), zap.String("key", key))
 		return nil, ErrCacheMiss
 	}
@@ -119,6 +120,20 @@ func Get[T any](ctx context.Context, group, key string) (*T, error) {
 	}
 	ctxLogger.Debug(ctx, "using cache", zap.String("group", group), zap.String("key", key))
 	return &output, nil
+}
+
+func GetSet[T any](ctx context.Context, cacheTimeout time.Duration, group, key string, gtr func(ctx context.Context) (T, error)) (T, error) {
+	if v, err := Get[T](ctx, group, key); errors.Is(err, ErrCacheMiss) || v == nil {
+		nv, err := gtr(ctx)
+		if err != nil {
+			var tmp T
+			return tmp, err
+		}
+		_ = SetWithExpiration[T](ctx, cacheTimeout, group, key, nv)
+		return nv, nil
+	} else {
+		return *v, nil
+	}
 }
 
 func GetFromCache[T any](ctx context.Context, cache Cache, group, key string) (*T, error) {

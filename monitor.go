@@ -90,7 +90,13 @@ func (c *CacheMonitorImpl) AddGroupKeys(ctx context.Context, group string, newKe
 	} else {
 		foundKeys = *keys
 	}
+	if foundKeys == nil {
+		foundKeys = map[string]struct{}{}
+	}
 	for _, k := range newKeys {
+		if foundKeys == nil {
+			return nil
+		}
 		foundKeys[k] = struct{}{}
 	}
 	return SetWithExpiration[map[string]struct{}](ctx, 60*time.Minute, GroupPrefix, key, foundKeys)

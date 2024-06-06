@@ -2,7 +2,9 @@ package ctx_cache
 
 import (
 	"context"
+	"fmt"
 	"strconv"
+	"strings"
 	"time"
 
 	"go.uber.org/multierr"
@@ -33,6 +35,13 @@ func NewTieredCache(setter GetCache, cacheList ...Cache) Cache {
 	}
 }
 
+func (t *TieredCache) GetName() string {
+	pool := []string{}
+	for _, cache := range t.cachePool {
+		pool = append(pool, cache.GetName())
+	}
+	return fmt.Sprintf("TIEREDCAHCE_%s", strings.Join(pool, "-"))
+}
 func (t *TieredCache) SetCacheWithExpiration(ctx context.Context, cacheTimeout time.Duration, group, key string, item interface{}) error {
 	var err error
 	var success bool

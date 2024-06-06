@@ -22,9 +22,10 @@ const (
 )
 
 var (
-	ErrCacheMiss = errors.New("cache missed")
-	DefaultCache Cache
-	SyncMutex    = sync.RWMutex{}
+	ErrCacheMiss    = errors.New("cache missed")
+	ErrCacheUpdated = errors.New("cache updated")
+	DefaultCache    Cache
+	SyncMutex       = sync.RWMutex{}
 )
 
 type Cache interface {
@@ -33,6 +34,7 @@ type Cache interface {
 	DeleteKey(ctx context.Context, key string) error
 	Ping(ctx context.Context) error
 	Close()
+	GetName() string
 	GetParentCaches() map[string]Cache
 }
 
@@ -119,7 +121,7 @@ type Wrapper[T any] struct {
 func Get[T any](ctx context.Context, group, key string) (*T, error) {
 	if group != "" && GlobalCacheMonitor.HasGroupKeyBeenUpdated(ctx, group) {
 		ctxLogger.Debug(ctx, "group has been updated", zap.String("group", group), zap.String("key", key))
-		return nil, ErrCacheMiss
+		return nil, ErrCacheUpdated
 	}
 	data, err := GetCacheFromContext(ctx).GetCache(ctx, group, GetKey[T](group, key))
 	if err != nil {
@@ -136,7 +138,7 @@ func Get[T any](ctx context.Context, group, key string) (*T, error) {
 }
 
 func GetSet[T any](ctx context.Context, cacheTimeout time.Duration, group, key string, gtr func(ctx context.Context) (T, error)) (T, error) {
-	if v, err := Get[T](ctx, group, key); errors.Is(err, ErrCacheMiss) || v == nil {
+	if v, err := Get[T](ctx, group, key); errors.Is(err, ErrCacheMiss) || errors.Is(err, ErrCacheUpdated) || v == nil {
 		nv, err := gtr(ctx)
 		if err != nil {
 			var tmp T
@@ -149,7 +151,7 @@ func GetSet[T any](ctx context.Context, cacheTimeout time.Duration, group, key s
 	}
 }
 func GetSetP[T any](ctx context.Context, cacheTimeout time.Duration, group, key string, gtr func(ctx context.Context) (*T, error)) (*T, error) {
-	if v, err := Get[T](ctx, group, key); errors.Is(err, ErrCacheMiss) || v == nil {
+	if v, err := Get[T](ctx, group, key); errors.Is(err, ErrCacheMiss) || errors.Is(err, ErrCacheUpdated) || v == nil {
 		nv, err := gtr(ctx)
 		if err != nil {
 			return nil, err
@@ -166,7 +168,7 @@ func GetSetP[T any](ctx context.Context, cacheTimeout time.Duration, group, key 
 
 func GetFromCache[T any](ctx context.Context, cache Cache, group, key string) (*T, error) {
 	if GlobalCacheMonitor.HasGroupKeyBeenUpdated(ctx, group) {
-		return nil, ErrCacheMiss
+		return nil, ErrCacheUpdated
 	}
 	data, err := cache.GetCache(ctx, group, GetKey[T](group, key))
 	if err != nil {
@@ -187,16 +189,19 @@ func ContextWithCache(ctx context.Context, cache Cache) context.Context {
 func GetCacheFromContext(ctx context.Context) Cache {
 	if ctx == nil {
 		if DefaultCache == nil {
+			ctxLogger.Info(ctx, "setting default cache")
 			DefaultCache = &GoCache{
 				defaultDuration: cache.DefaultExpiration,
 				cacher:          cache.New(5*time.Minute, time.Minute),
 				cacheTags:       NewCacheTags("go-cache", "backup"),
 			}
 		}
+		ctxLogger.Info(ctx, "using default cache")
 		return DefaultCache
 	}
 	gCache := ctx.Value(CTX_CACHE)
 	if gCache == nil {
+		ctxLogger.Info(ctx, "setting default cache")
 		if DefaultCache == nil {
 			DefaultCache = &GoCache{
 				defaultDuration: cache.DefaultExpiration,
@@ -204,6 +209,7 @@ func GetCacheFromContext(ctx context.Context) Cache {
 				cacheTags:       NewCacheTags("go-cache", "backup"),
 			}
 		}
+		ctxLogger.Info(ctx, "using default cache")
 		return DefaultCache
 	}
 	return gCache.(Cache)

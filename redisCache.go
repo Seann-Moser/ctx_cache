@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"time"
 
 	redis "github.com/Seann-Moser/ociredis"
@@ -56,7 +57,9 @@ func NewRedisCache(cacher *redis.Client, defaultDuration time.Duration, instance
 func (c *RedisCache) Close() {
 	_ = c.cacher.Close()
 }
-
+func (c *RedisCache) GetName() string {
+	return fmt.Sprintf("REDISCACHE_%s", c.cacheTags.instance)
+}
 func (c *RedisCache) DeleteKey(ctx context.Context, key string) error {
 	return c.cacher.Del(key).Err()
 }

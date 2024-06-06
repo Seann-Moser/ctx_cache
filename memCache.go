@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"time"
 
 	"github.com/orijtech/gomemcache/memcache"
@@ -42,6 +43,10 @@ func NewMemcache(cacher *memcache.Client, defaultDuration time.Duration, instanc
 		cacheTags:       NewCacheTags("memcache", instance),
 		enabled:         enabled,
 	}
+}
+
+func (c *MemCache) GetName() string {
+	return fmt.Sprintf("MEMCACHE_%s", c.cacheTags.instance)
 }
 
 func (c *MemCache) Close() {

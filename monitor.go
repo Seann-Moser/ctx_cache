@@ -44,9 +44,7 @@ func (c *CacheMonitorImpl) UpdateCache(ctx context.Context, group string, key st
 	}
 	now := time.Now()
 	groupKey := fmt.Sprintf("%s_%s_updated", GroupPrefix, group)
-	c.Mutex.Lock()
-	defer c.Mutex.Unlock()
-	c.groupKeys[groupKey] = now.Unix()
+	c.setGroupKeys(groupKey, now.Unix())
 	err = SetWithExpiration[int64](ctx, 60*time.Minute, GroupPrefix, groupKey, now.Unix())
 	if err != nil {
 		return err
@@ -126,14 +124,25 @@ func (c *CacheMonitorImpl) HasGroupKeyBeenUpdated(ctx context.Context, group str
 			return true
 		}
 	}
-	c.Mutex.Lock()
-	if v, found := c.groupKeys[key]; found && v == *lastUpdated {
-		c.Mutex.Unlock()
+	if c.findGroupKey(key, *lastUpdated) {
 		return false
-	} else {
-		ctxLogger.Debug(ctx, "last updated does not match group", zap.Int64("group_key", v), zap.Int64("last_updated", *lastUpdated))
 	}
-	c.groupKeys[key] = *lastUpdated
-	c.Mutex.Unlock()
+	ctxLogger.Debug(ctx, "last updated does not match group", zap.Int64("last_updated", *lastUpdated))
+	c.setGroupKeys(key, *lastUpdated)
 	return true
+}
+
+func (c *CacheMonitorImpl) setGroupKeys(key string, lastUpdated int64) {
+	c.Mutex.Lock()
+	defer c.Mutex.Unlock()
+	c.groupKeys[key] = lastUpdated
+}
+
+func (c *CacheMonitorImpl) findGroupKey(key string, lastUpdated int64) bool {
+	c.Mutex.RLock()
+	defer c.Mutex.RUnlock()
+	if v, found := c.groupKeys[key]; found && v == lastUpdated {
+		return true
+	}
+	return false
 }

@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"time"
 
 	"github.com/spf13/pflag"
@@ -18,6 +19,10 @@ type GoCache struct {
 	defaultDuration time.Duration
 	cacher          *cache.Cache
 	cacheTags       CacheTags
+}
+
+func (c *GoCache) GetName() string {
+	return fmt.Sprintf("GOCACHE_%s", c.cacheTags.instance)
 }
 
 func (c *GoCache) GetParentCaches() map[string]Cache {

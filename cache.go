@@ -189,19 +189,16 @@ func ContextWithCache(ctx context.Context, cache Cache) context.Context {
 func GetCacheFromContext(ctx context.Context) Cache {
 	if ctx == nil {
 		if DefaultCache == nil {
-			ctxLogger.Info(ctx, "setting default cache")
 			DefaultCache = &GoCache{
 				defaultDuration: cache.DefaultExpiration,
 				cacher:          cache.New(5*time.Minute, time.Minute),
 				cacheTags:       NewCacheTags("go-cache", "backup"),
 			}
 		}
-		ctxLogger.Info(ctx, "using default cache")
 		return DefaultCache
 	}
 	gCache := ctx.Value(CTX_CACHE)
 	if gCache == nil {
-		ctxLogger.Info(ctx, "setting default cache")
 		if DefaultCache == nil {
 			DefaultCache = &GoCache{
 				defaultDuration: cache.DefaultExpiration,
@@ -209,7 +206,6 @@ func GetCacheFromContext(ctx context.Context) Cache {
 				cacheTags:       NewCacheTags("go-cache", "backup"),
 			}
 		}
-		ctxLogger.Info(ctx, "using default cache")
 		return DefaultCache
 	}
 	return gCache.(Cache)

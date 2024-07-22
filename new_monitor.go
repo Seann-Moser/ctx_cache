@@ -50,7 +50,7 @@ func NewMonitorV2(duration time.Duration) CacheMonitor {
 
 func (c *CacheMonitorV2) AddGroupKeys(ctx context.Context, group string, newKeys ...string) error {
 	index := c.SetGroupIndex(group)
-	if index == 0 {
+	if index < 0 {
 		return nil
 	}
 	c.groupKeys[index].mutex.Lock()
@@ -59,22 +59,24 @@ func (c *CacheMonitorV2) AddGroupKeys(ctx context.Context, group string, newKeys
 	for _, key := range newKeys {
 		c.groupKeys[index].keys[key] = struct{}{}
 	}
-	return SetWithExpiration[GroupKeys](ctx, c.cacheDuration, GroupPrefix, group, c.groupKeys[index])
+	return SetWithExpiration[int64](ctx, c.cacheDuration, GroupPrefix, group, c.groupKeys[index].LastUpdateTime.Unix())
 }
 
 func (c *CacheMonitorV2) HasGroupKeyBeenUpdated(ctx context.Context, group string) bool {
 	index := c.GetGroupIndex(group)
-	if index == 0 {
+	if index < 0 {
 		return false
 	}
-	g, err := Get[GroupKeys](ctx, GroupPrefix, group)
+	g, err := Get[int64](ctx, GroupPrefix, group)
 	if err != nil {
 		return false
 	}
 
 	c.groupKeys[index].mutex.RLock()
-	defer c.groupKeys[index].mutex.RUnlock()
-	return g.LastUpdateTime.Before(g.LastUpdateTime)
+	time.Unix(int64(*g), 0)
+	v := c.groupKeys[index].LastUpdateTime.Before(time.Unix(int64(*g), 0))
+	c.groupKeys[index].mutex.RUnlock()
+	return v
 }
 
 func (c *CacheMonitorV2) GetGroupKeys(ctx context.Context, group string) (map[string]struct{}, error) {
@@ -116,7 +118,7 @@ func (c *CacheMonitorV2) DeleteCache(ctx context.Context, group string) error {
 	}
 	wg.Wait()
 	c.groupKeys[index].mutex.Unlock()
-	return Delete[GroupKeys](ctx, GroupPrefix, group)
+	return Delete[int64](ctx, GroupPrefix, group)
 }
 
 func (c *CacheMonitorV2) UpdateCache(ctx context.Context, group string, key string) error {
@@ -128,7 +130,7 @@ func (c *CacheMonitorV2) UpdateCache(ctx context.Context, group string, key stri
 	c.groupKeys[index].LastUpdateTime = time.Now()
 	c.groupKeys[index].keys[key] = struct{}{}
 	c.groupKeys[index].mutex.Unlock()
-	return SetWithExpiration[GroupKeys](ctx, c.cacheDuration, GroupPrefix, group, c.groupKeys[index])
+	return SetWithExpiration[int64](ctx, c.cacheDuration, GroupPrefix, group, c.groupKeys[index].LastUpdateTime.Unix())
 }
 
 func (c *CacheMonitorV2) Close() {
@@ -141,8 +143,8 @@ func (c *CacheMonitorV2) Start(ctx context.Context) {
 
 func (c *CacheMonitorV2) SetGroupIndex(group string) uint8 {
 	i := c.GetGroupIndex(group)
-	if i != 0 {
-		return i
+	if i >= 0 {
+		return uint8(i)
 	}
 	c.groupMutex.Lock()
 	defer c.groupMutex.Unlock()
@@ -155,12 +157,14 @@ func (c *CacheMonitorV2) SetGroupIndex(group string) uint8 {
 	return c.groups[group]
 }
 
-func (c *CacheMonitorV2) GetGroupIndex(group string) uint8 {
+func (c *CacheMonitorV2) GetGroupIndex(group string) int {
 	c.groupMutex.RLock()
 	i, found := c.groups[group]
-	defer c.groupMutex.RUnlock()
+	c.groupMutex.RUnlock()
 	if found {
-		return i
+		return int(i)
 	}
-	return 0
+	return -1
 }
+
+// ConvertToBytes attempts to convert various primary types to a []byte representation

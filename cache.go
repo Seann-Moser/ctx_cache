@@ -50,11 +50,12 @@ func GetMD5Hash(text string) string {
 }
 
 func GetKey[T any](key ...string) string {
-	return GetMD5Hash(fmt.Sprintf("%T_%s", *new(T), strings.Join(key, "_")))
+	return fmt.Sprintf("%s_%s", GetTypeReflect[T](*new(T)), strings.Join(key, "_"))
+	//return GetMD5Hash(fmt.Sprintf("%T_%s", *new(T), strings.Join(key, "_")))
 }
 
 func Set[T any](ctx context.Context, group, key string, data T) error {
-	err := GetCacheFromContext(ctx).SetCache(ctx, group, GetKey[T](group, key), Wrapper[T]{Data: data})
+	err := GetCacheFromContext(ctx).SetCache(ctx, group, GetKey[T](group, key), Wrapper[T]{Data: data}.Get())
 	if err != nil {
 		return err
 	}
@@ -73,7 +74,7 @@ func DeleteKey(ctx context.Context, key string) error {
 }
 
 func SetWithExpiration[T any](ctx context.Context, cacheTimeout time.Duration, group, key string, data T) error {
-	err := GetCacheFromContext(ctx).SetCacheWithExpiration(ctx, cacheTimeout, group, GetKey[T](group, key), Wrapper[T]{Data: data})
+	err := GetCacheFromContext(ctx).SetCacheWithExpiration(ctx, cacheTimeout, group, GetKey[T](group, key), Wrapper[T]{Data: data}.Get())
 	if err != nil {
 		ctxLogger.Debug(ctx, "failed setting cache", zap.String("group", group), zap.String("key", key))
 		return err
@@ -86,25 +87,40 @@ func SetWithExpiration[T any](ctx context.Context, cacheTimeout time.Duration, g
 }
 
 func SetFromCache[T any](ctx context.Context, cache Cache, group, key string, data T) error {
-	return cache.SetCache(ctx, group, GetKey[T](group, key), Wrapper[T]{Data: data})
+	return cache.SetCache(ctx, group, GetKey[T](group, key), Wrapper[T]{Data: data}.Get())
 }
 func SetFromCacheWithExpiration[T any](ctx context.Context, cache Cache, cacheTimeout time.Duration, group, key string, data T) error {
-	return cache.SetCacheWithExpiration(ctx, cacheTimeout, group, GetKey[T](group, key), Wrapper[T]{Data: data})
+	return cache.SetCacheWithExpiration(ctx, cacheTimeout, group, GetKey[T](group, key), Wrapper[T]{Data: data}.Get())
 }
 
 type Wrapper[T any] struct {
 	Data T `json:"data"`
 }
 
+func (w Wrapper[T]) Get() interface{} {
+	if CheckPrimaryType[T](w.Data) {
+		return w.Data
+	}
+	return w
+}
+
 func Get[T any](ctx context.Context, group, key string) (*T, error) {
-	if group != "" && GlobalCacheMonitor.HasGroupKeyBeenUpdated(ctx, group) {
-		return nil, ErrCacheUpdated
+	if group != GroupPrefix && group != "" {
+		if GlobalCacheMonitor.HasGroupKeyBeenUpdated(ctx, group) {
+			return nil, ErrCacheUpdated
+		}
 	}
 	data, err := GetCacheFromContext(ctx).GetCache(ctx, group, GetKey[T](group, key))
 	if err != nil {
 		return nil, err
 	}
-
+	if CheckPrimaryType[T](*new(T)) {
+		t, err := ConvertBytesToType[T](data)
+		if err != nil {
+			return nil, err
+		}
+		return &t, nil
+	}
 	var output Wrapper[T]
 	err = json.Unmarshal(data, &output)
 	if err != nil {

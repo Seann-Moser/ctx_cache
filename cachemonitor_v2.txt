@@ -1,0 +1,16 @@
+goos: linux
+goarch: amd64
+pkg: github.com/Seann-Moser/ctx_cache
+cpu: AMD Ryzen 7 3700X 8-Core Processor
+BenchmarkNewMonitorCacheMonitor
+BenchmarkNewMonitorCacheMonitor/AddGroupKeys
+BenchmarkNewMonitorCacheMonitor/AddGroupKeys-16         	  278128	      4357 ns/op
+BenchmarkNewMonitorCacheMonitor/HasGroupKeyBeenUpdated
+BenchmarkNewMonitorCacheMonitor/HasGroupKeyBeenUpdated-16         	  188242	      5972 ns/op
+BenchmarkNewMonitorCacheMonitor/GetGroupKeys
+BenchmarkNewMonitorCacheMonitor/GetGroupKeys-16                   	80896280	        14.83 ns/op
+BenchmarkNewMonitorCacheMonitor/DeleteCache
+BenchmarkNewMonitorCacheMonitor/DeleteCache-16                    	 1029902	      1144 ns/op
+BenchmarkNewMonitorCacheMonitor/UpdateCache
+BenchmarkNewMonitorCacheMonitor/UpdateCache-16                    	  294651	      4101 ns/op
+PASS

@@ -60,6 +60,7 @@ func (c *CacheMonitorImpl) Start(ctx context.Context) {
 	if c.started {
 		return
 	}
+	c.started = true
 	for i := 0; i < c.Workers; i++ {
 		go func() {
 			for q := range c.updateQueue {

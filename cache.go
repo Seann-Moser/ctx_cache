@@ -7,9 +7,7 @@ import (
 	"errors"
 	"fmt"
 	json "github.com/goccy/go-json"
-	"reflect"
 	"strings"
-	"sync"
 	"time"
 
 	"github.com/Seann-Moser/go-serve/pkg/ctxLogger"
@@ -25,7 +23,6 @@ var (
 	ErrCacheMiss    = errors.New("cache missed")
 	ErrCacheUpdated = errors.New("cache updated")
 	DefaultCache    Cache
-	SyncMutex       = sync.RWMutex{}
 )
 
 type Cache interface {
@@ -45,24 +42,6 @@ type SetCache interface {
 
 type GetCache interface {
 	GetCache(ctx context.Context, group, key string) ([]byte, error)
-}
-
-func getType(myVar interface{}) string {
-	if myVar == nil {
-		return "nil"
-	}
-	t := reflect.TypeOf(myVar)
-	if t.Kind() == reflect.Ptr {
-		if t.Elem().Kind() == reflect.Struct {
-			return t.Elem().Name()
-		}
-		return t.Elem().String()
-	} else {
-		if t.Kind() == reflect.Struct {
-			return t.Name()
-		}
-		return t.String()
-	}
 }
 
 func GetMD5Hash(text string) string {
@@ -119,7 +98,6 @@ type Wrapper[T any] struct {
 
 func Get[T any](ctx context.Context, group, key string) (*T, error) {
 	if group != "" && GlobalCacheMonitor.HasGroupKeyBeenUpdated(ctx, group) {
-		ctxLogger.Debug(ctx, "group has been updated", zap.String("group", group), zap.String("key", key))
 		return nil, ErrCacheUpdated
 	}
 	data, err := GetCacheFromContext(ctx).GetCache(ctx, group, GetKey[T](group, key))

@@ -3,6 +3,8 @@ package ctx_cache
 import (
 	"context"
 	"fmt"
+	"github.com/spf13/pflag"
+	"github.com/spf13/viper"
 	"sync"
 	"time"
 
@@ -21,12 +23,28 @@ type CacheMonitor interface {
 	GetGroupKeys(ctx context.Context, group string) (map[string]struct{}, error)
 	DeleteCache(ctx context.Context, group string) error
 	UpdateCache(ctx context.Context, group string, key string) error
+	Close()
+	Start(ctx context.Context)
 }
 
 type CacheMonitorImpl struct {
 	cleanDuration time.Duration
 	Mutex         *sync.RWMutex
 	groupKeys     map[string]int64
+	updateQueue   chan *Group
+	Workers       int
+	started       bool
+}
+
+type Group struct {
+	Group string
+	Key   string
+}
+
+func MonitorFlags(prefix string) *pflag.FlagSet {
+	fs := pflag.NewFlagSet("monitor", pflag.ExitOnError)
+	fs.Int("monitor-workers", 10, "")
+	return fs
 }
 
 func NewMonitor() CacheMonitor {
@@ -34,10 +52,42 @@ func NewMonitor() CacheMonitor {
 		cleanDuration: time.Minute,
 		groupKeys:     make(map[string]int64),
 		Mutex:         &sync.RWMutex{},
+		updateQueue:   make(chan *Group, viper.GetInt("monitor-workers")*50),
+		Workers:       viper.GetInt("monitor-workers"),
+	}
+}
+func (c *CacheMonitorImpl) Start(ctx context.Context) {
+	if c.started {
+		return
+	}
+	for i := 0; i < c.Workers; i++ {
+		go func() {
+			for q := range c.updateQueue {
+				_ = c.uc(ctx, q.Group, q.Key)
+			}
+		}()
 	}
 }
 
+func (c *CacheMonitorImpl) Close() {
+	close(c.updateQueue)
+}
 func (c *CacheMonitorImpl) UpdateCache(ctx context.Context, group string, key string) error {
+	if c.Workers == 0 {
+		return c.uc(ctx, group, key)
+	}
+	select {
+	case c.updateQueue <- &Group{
+		Group: group,
+		Key:   key,
+	}:
+		return nil
+	default:
+		return c.uc(ctx, group, key)
+	}
+
+}
+func (c *CacheMonitorImpl) uc(ctx context.Context, group string, key string) error {
 	err := c.AddGroupKeys(ctx, group, key)
 	if err != nil {
 		return err
@@ -118,16 +168,12 @@ func (c *CacheMonitorImpl) HasGroupKeyBeenUpdated(ctx context.Context, group str
 	for _, c := range GetCacheFromContext(ctx).GetParentCaches() {
 		i, err := GetFromCache[int64](ctx, c, GroupPrefix, key)
 		if err != nil || *i != *lastUpdated {
-			if i != nil {
-				ctxLogger.Debug(ctx, "last updated does not match", zap.Int64("lastUpdated", *lastUpdated), zap.Int64("cache", *i), zap.Error(err))
-			}
 			return true
 		}
 	}
 	if c.findGroupKey(key, *lastUpdated) {
 		return false
 	}
-	ctxLogger.Debug(ctx, "last updated does not match group", zap.Int64("last_updated", *lastUpdated))
 	c.setGroupKeys(key, *lastUpdated)
 	return true
 }

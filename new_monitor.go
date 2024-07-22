@@ -81,7 +81,7 @@ func (c *CacheMonitorV2) HasGroupKeyBeenUpdated(ctx context.Context, group strin
 
 func (c *CacheMonitorV2) GetGroupKeys(ctx context.Context, group string) (map[string]struct{}, error) {
 	index := c.GetGroupIndex(group)
-	if index == 0 {
+	if index < 0 {
 		return make(map[string]struct{}), nil
 	}
 	return c.groupKeys[index].keys, nil
@@ -89,7 +89,10 @@ func (c *CacheMonitorV2) GetGroupKeys(ctx context.Context, group string) (map[st
 
 func (c *CacheMonitorV2) DeleteCache(ctx context.Context, group string) error {
 	index := c.GetGroupIndex(group)
-	if index == 0 {
+	if index < 0 {
+		return nil
+	}
+	if index > len(c.groupKeys) {
 		return nil
 	}
 	c.groupKeys[index].mutex.Lock()
@@ -123,7 +126,7 @@ func (c *CacheMonitorV2) DeleteCache(ctx context.Context, group string) error {
 
 func (c *CacheMonitorV2) UpdateCache(ctx context.Context, group string, key string) error {
 	index := c.SetGroupIndex(group)
-	if index == 0 {
+	if index < 0 {
 		return nil
 	}
 	c.groupKeys[index].mutex.Lock()

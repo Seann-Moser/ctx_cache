@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	json "github.com/goccy/go-json"
 	"time"
 
 	"github.com/spf13/pflag"
@@ -102,16 +101,6 @@ func (c *GoCache) GetCache(ctx context.Context, group, key string) ([]byte, erro
 		cacheErr = ErrCacheMiss
 		return nil, ErrCacheMiss
 	} else {
-		switch v := data.(type) {
-		case string:
-			return []byte(v), nil
-		default:
-			b, err := json.Marshal(data)
-			if err != nil {
-				cacheErr = err
-				return nil, err
-			}
-			return b, nil
-		}
+		return ConvertToBytes(data)
 	}
 }

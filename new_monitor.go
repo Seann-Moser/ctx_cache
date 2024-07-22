@@ -13,6 +13,7 @@ type CacheMonitorV2 struct {
 	groups     map[string]uint8
 
 	groupKeys     []GroupKeys
+	workers       int
 	cacheDuration time.Duration
 }
 
@@ -35,6 +36,7 @@ func NewMonitorV2WithFlags() CacheMonitor {
 		groups:        make(map[string]uint8),
 		groupKeys:     make([]GroupKeys, 0),
 		cacheDuration: viper.GetDuration("monitor-cache-duration"),
+		workers:       viper.GetInt("monitor-workers"),
 	}
 }
 func NewMonitorV2(duration time.Duration) CacheMonitor {
@@ -91,6 +93,28 @@ func (c *CacheMonitorV2) DeleteCache(ctx context.Context, group string) error {
 	c.groupKeys[index].mutex.Lock()
 	c.groupKeys[index].keys = make(map[string]struct{})
 	c.groupKeys[index].LastUpdateTime = time.UnixMicro(0)
+	wg := sync.WaitGroup{}
+
+	ch := make(chan string)
+	go func() {
+		for key, _ := range c.groupKeys[index].keys {
+			ch <- key
+		}
+		close(ch)
+	}()
+	if c.workers <= 0 {
+		c.workers = 1
+	}
+	wg.Add(c.workers)
+	for i := 0; i < c.workers; i++ {
+		go func() {
+			for key := range ch {
+				_ = DeleteKey(ctx, key)
+			}
+			wg.Done()
+		}()
+	}
+	wg.Wait()
 	c.groupKeys[index].mutex.Unlock()
 	return Delete[GroupKeys](ctx, GroupPrefix, group)
 }

@@ -5,6 +5,7 @@ go 1.21.4
 require (
 	github.com/Seann-Moser/go-serve v0.7.86
 	github.com/Seann-Moser/ociredis v1.0.0
+	github.com/goccy/go-json v0.10.3
 	github.com/orijtech/gomemcache v0.0.1
 	github.com/patrickmn/go-cache v2.1.0+incompatible
 	github.com/spf13/pflag v1.0.5

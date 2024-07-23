@@ -25,6 +25,7 @@ type CacheMonitor interface {
 	UpdateCache(ctx context.Context, group string, key string) error
 	Close()
 	Start(ctx context.Context)
+	Record(ctx context.Context, cmd CacheCmd, status Status) func(err error)
 }
 
 type CacheMonitorImpl struct {
@@ -192,4 +193,10 @@ func (c *CacheMonitorImpl) findGroupKey(key string, lastUpdated int64) bool {
 		return true
 	}
 	return false
+}
+
+func (c *CacheMonitorImpl) Record(ctx context.Context, cmd CacheCmd, status Status) func(err error) {
+	return func(err error) {
+
+	}
 }

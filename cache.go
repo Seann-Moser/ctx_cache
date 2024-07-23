@@ -4,9 +4,8 @@ import (
 	"context"
 	"crypto/md5"
 	"encoding/base64"
+	"encoding/json"
 	"errors"
-	"fmt"
-	json "github.com/goccy/go-json"
 	"strings"
 	"time"
 
@@ -23,7 +22,12 @@ var (
 	ErrCacheMiss    = errors.New("cache missed")
 	ErrCacheUpdated = errors.New("cache updated")
 	DefaultCache    Cache
+	UseHash         bool = false
 )
+
+type CacheObject interface {
+	GetName() string
+}
 
 type Cache interface {
 	SetCache
@@ -49,9 +53,9 @@ func GetMD5Hash(text string) string {
 	return base64.StdEncoding.EncodeToString(hash[:])
 }
 
-func GetKey[T any](key ...string) string {
-	return fmt.Sprintf("%s_%s", GetTypeReflect[T](*new(T)), strings.Join(key, "_"))
-	//return GetMD5Hash(fmt.Sprintf("%T_%s", *new(T), strings.Join(key, "_")))
+func GetKey[T any](key1, key2 string) string {
+	return GetTypeReflect[T]() + key1 + key2
+
 }
 
 func Set[T any](ctx context.Context, group, key string, data T) error {
@@ -110,10 +114,14 @@ func Get[T any](ctx context.Context, group, key string) (*T, error) {
 			return nil, ErrCacheUpdated
 		}
 	}
-	data, err := GetCacheFromContext(ctx).GetCache(ctx, group, GetKey[T](group, key))
+	k := GetKey[T](group, key)
+	c := GetCacheFromContext(ctx)
+
+	data, err := c.GetCache(ctx, group, k)
 	if err != nil {
 		return nil, err
 	}
+
 	if CheckPrimaryType[T](*new(T)) {
 		t, err := ConvertBytesToType[T](data)
 		if err != nil {

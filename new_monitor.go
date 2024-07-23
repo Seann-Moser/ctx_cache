@@ -73,7 +73,6 @@ func (c *CacheMonitorV2) HasGroupKeyBeenUpdated(ctx context.Context, group strin
 	}
 
 	c.groupKeys[index].mutex.RLock()
-	time.Unix(int64(*g), 0)
 	v := c.groupKeys[index].LastUpdateTime.Before(time.Unix(int64(*g), 0))
 	c.groupKeys[index].mutex.RUnlock()
 	return v
@@ -168,6 +167,10 @@ func (c *CacheMonitorV2) GetGroupIndex(group string) int {
 		return int(i)
 	}
 	return -1
+}
+
+func (c *CacheMonitorV2) Record(ctx context.Context, cmd CacheCmd, status Status) func(err error) {
+	return func(err error) {}
 }
 
 // ConvertToBytes attempts to convert various primary types to a []byte representation

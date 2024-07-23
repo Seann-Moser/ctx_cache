@@ -50,10 +50,10 @@ func ConvertBytesToType[T any](data []byte) (T, error) {
 	var result T
 	var err error
 
-	switch GetTypeReflect(result) {
+	switch GetTypeReflect[T]() {
 	case "int":
 		var intValue int64
-		//intValue, err = strconv.ParseInt(string(data), 10, 64)
+		intValue, err = strconv.ParseInt(string(data), 10, 64)
 		result = any(int(intValue)).(T)
 	case "int8":
 		var intValue int64
@@ -116,7 +116,7 @@ func ConvertBytesToType[T any](data []byte) (T, error) {
 }
 
 func CheckPrimaryType[T any](val T) bool {
-	switch GetTypeReflect(val) {
+	switch GetTypeReflect[T]() {
 	case "int", "int8", "int16", "int32", "int64":
 		return true
 	case "uint", "uint8", "uint16", "uint32", "uint64":
@@ -133,6 +133,6 @@ func CheckPrimaryType[T any](val T) bool {
 }
 
 // GetTypeReflect returns the type of a generic value using reflect
-func GetTypeReflect[T any](val T) string {
-	return reflect.TypeOf(val).String()
+func GetTypeReflect[T any]() string {
+	return reflect.TypeOf(new(T)).String()
 }

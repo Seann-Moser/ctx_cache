@@ -1,0 +1,34 @@
+goos: linux
+goarch: amd64
+pkg: github.com/Seann-Moser/ctx_cache
+cpu: AMD Ryzen 7 3700X 8-Core Processor             
+BenchmarkNewMonitorCacheMonitor/AddGroupKeys-16         	  108313	     10224 ns/op
+BenchmarkNewMonitorCacheMonitor/HasGroupKeyBeenUpdated-16         	  257694	      4280 ns/op
+BenchmarkNewMonitorCacheMonitor/GetGroupKeys-16                   	  178207	      6379 ns/op
+BenchmarkNewMonitorCacheMonitor/DeleteCache-16                    	  165612	      6476 ns/op
+BenchmarkNewMonitorCacheMonitor/UpdateCache-16                    	   83523	     13011 ns/op
+BenchmarkNewMonitorV2Monitor/AddGroupKeys-16                      	  382876	      3361 ns/op
+BenchmarkNewMonitorV2Monitor/HasGroupKeyBeenUpdated-16            	  431184	      3579 ns/op
+BenchmarkNewMonitorV2Monitor/GetGroupKeys-16                      	122851958	         9.838 ns/op
+BenchmarkNewMonitorV2Monitor/DeleteCache-16                       	  344631	      3255 ns/op
+BenchmarkNewMonitorV2Monitor/UpdateCache-16                       	  334299	      3566 ns/op
+BenchmarkCheckPrimaryType/int-16                                  	113611461	        10.05 ns/op
+BenchmarkCheckPrimaryType/float64-16                              	100000000	        11.02 ns/op
+BenchmarkCheckPrimaryType/string-16                               	110639966	        10.96 ns/op
+BenchmarkCheckPrimaryType/bool-16                                 	117791631	         9.525 ns/op
+BenchmarkCheckPrimaryType/slice-16                                	113678662	        11.09 ns/op
+BenchmarkCheckPrimaryType/struct-16                               	93900048	        12.74 ns/op
+BenchmarkConvertBytesToType/int-16                                	16532071	        66.59 ns/op
+BenchmarkConvertBytesToType/float64-16                            	14452126	        89.16 ns/op
+BenchmarkConvertBytesToType/bool-16                               	26679439	        37.65 ns/op
+BenchmarkConvertBytesToType/string-16                             	 9554383	       121.5 ns/op
+BenchmarkGetTypeReflect/int-16                                    	146888445	         8.340 ns/op
+BenchmarkGetTypeReflect/float64-16                                	153349920	         8.000 ns/op
+BenchmarkGetTypeReflect/string-16                                 	139892512	         8.328 ns/op
+BenchmarkGetTypeReflect/bool-16                                   	144696933	         8.213 ns/op
+BenchmarkGetTypeSprintf/int-16                                    	12854688	        93.39 ns/op
+BenchmarkGetTypeSprintf/float64-16                                	 8408120	       141.6 ns/op
+BenchmarkGetTypeSprintf/string-16                                 	 5688901	       181.8 ns/op
+BenchmarkGetTypeSprintf/bool-16                                   	12096727	        89.86 ns/op
+PASS
+ok  	github.com/Seann-Moser/ctx_cache	41.232s

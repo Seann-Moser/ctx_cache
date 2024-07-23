@@ -84,21 +84,21 @@ func (c *GoCache) SetCache(ctx context.Context, group, key string, item interfac
 }
 
 func (c *GoCache) GetCache(ctx context.Context, group, key string) ([]byte, error) {
-	var cacheErr error
-	s := c.cacheTags.record(ctx, CacheCmdGET, func(err error) CacheStatus {
-		if errors.Is(err, ErrCacheMiss) {
-			return CacheStatusMISSING
-		}
-		if err != nil {
-			return CacheStatusERR
-		}
-		return CacheStatusFOUND
-	})
-	defer func() {
-		s(cacheErr)
-	}()
+	//var cacheErr error
+	//s := c.cacheTags.record(ctx, CacheCmdGET, func(err error) CacheStatus {
+	//	if errors.Is(err, ErrCacheMiss) {
+	//		return CacheStatusMISSING
+	//	}
+	//	if err != nil {
+	//		return CacheStatusERR
+	//	}
+	//	return CacheStatusFOUND
+	//})
+	//defer func() {
+	//	s(cacheErr)
+	//}()
+	//todo hit global cache record
 	if data, found := c.cacher.Get(key); !found {
-		cacheErr = ErrCacheMiss
 		return nil, ErrCacheMiss
 	} else {
 		return ConvertToBytes(data)

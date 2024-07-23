@@ -2,6 +2,7 @@ package ctx_cache
 
 import (
 	"context"
+	"errors"
 	"github.com/patrickmn/go-cache"
 	"testing"
 	"time"
@@ -146,4 +147,49 @@ func BenchmarkConvertBytesToType(b *testing.B) {
 			_, _ = ConvertBytesToType[string](stringData)
 		}
 	})
+}
+
+func benchmarkGet(b *testing.B, group string, key string, cacheSize int) {
+	c := NewGoCache(cache.New(5*time.Minute, time.Minute), time.Minute, "test")
+	ctx = ContextWithCache(context.Background(), c)
+
+	// Populate cache
+	for i := 0; i < cacheSize; i++ {
+		_ = Set[int](ctx, group, key+string(rune(i)), i)
+	}
+
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		_, err := Get[int](ctx, group, key+string(rune(i%cacheSize)))
+		if err != nil && err.Error() != "cache missed" && !errors.Is(err, ErrCacheUpdated) {
+			b.Fatalf("unexpected error: %v", err)
+		}
+	}
+}
+
+func BenchmarkGet_SmallCacheV2(b *testing.B) {
+	GlobalCacheMonitor = NewMonitorV2(time.Minute)
+	benchmarkGet(b, "test_group", "test_key", 100)
+}
+
+func BenchmarkGet_MediumCacheV2(b *testing.B) {
+	GlobalCacheMonitor = NewMonitorV2(time.Minute)
+	benchmarkGet(b, "test_group", "test_key", 1000)
+}
+
+func BenchmarkGet_LargeCacheV2(b *testing.B) {
+	GlobalCacheMonitor = NewMonitorV2(time.Minute)
+	benchmarkGet(b, "test_group", "test_key", 10000)
+}
+
+func BenchmarkGet_SmallCache(b *testing.B) {
+	benchmarkGet(b, "test_group", "test_key", 100)
+}
+
+func BenchmarkGet_MediumCache(b *testing.B) {
+	benchmarkGet(b, "test_group", "test_key", 1000)
+}
+
+func BenchmarkGet_LargeCache(b *testing.B) {
+	benchmarkGet(b, "test_group", "test_key", 10000)
 }

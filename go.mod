@@ -8,6 +8,7 @@ require (
 	github.com/goccy/go-json v0.10.3
 	github.com/orijtech/gomemcache v0.0.1
 	github.com/patrickmn/go-cache v2.1.0+incompatible
+	github.com/segmentio/fasthash v1.0.3
 	github.com/spf13/pflag v1.0.5
 	github.com/spf13/viper v1.18.2
 	go.opencensus.io v0.24.0

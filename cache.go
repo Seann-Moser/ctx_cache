@@ -6,7 +6,6 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"errors"
-	"fmt"
 	"strings"
 	"time"
 
@@ -23,7 +22,12 @@ var (
 	ErrCacheMiss    = errors.New("cache missed")
 	ErrCacheUpdated = errors.New("cache updated")
 	DefaultCache    Cache
+	UseHash         bool = false
 )
+
+type CacheObject interface {
+	GetName() string
+}
 
 type Cache interface {
 	SetCache
@@ -49,14 +53,12 @@ func GetMD5Hash(text string) string {
 	return base64.StdEncoding.EncodeToString(hash[:])
 }
 
-func GetKey[T any](key ...string) string {
-	k := fmt.Sprintf("%s_%s", GetTypeReflect[T](*new(T)), strings.Join(key, "_"))
-	return k
-	//return GetMD5Hash()
+func GetKey[T any](key1, key2 string) string {
+	return GetTypeReflect[T]() + key1 + key2
+
 }
 
 func Set[T any](ctx context.Context, group, key string, data T) error {
-
 	err := GetCacheFromContext(ctx).SetCache(ctx, group, GetKey[T](group, key), Wrapper[T]{Data: data}.Get())
 	if err != nil {
 		return err
@@ -112,11 +114,14 @@ func Get[T any](ctx context.Context, group, key string) (*T, error) {
 			return nil, ErrCacheUpdated
 		}
 	}
+	k := GetKey[T](group, key)
+	c := GetCacheFromContext(ctx)
 
-	data, err := GetCacheFromContext(ctx).GetCache(ctx, group, GetKey[T](group, key))
+	data, err := c.GetCache(ctx, group, k)
 	if err != nil {
 		return nil, err
 	}
+
 	if CheckPrimaryType[T](*new(T)) {
 		t, err := ConvertBytesToType[T](data)
 		if err != nil {

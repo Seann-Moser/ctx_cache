@@ -169,4 +169,8 @@ func (c *CacheMonitorV2) GetGroupIndex(group string) int {
 	return -1
 }
 
+func (c *CacheMonitorV2) Record(ctx context.Context, cmd CacheCmd, status Status) func(err error) {
+	return func(err error) {}
+}
+
 // ConvertToBytes attempts to convert various primary types to a []byte representation

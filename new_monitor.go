@@ -73,7 +73,6 @@ func (c *CacheMonitorV2) HasGroupKeyBeenUpdated(ctx context.Context, group strin
 	}
 
 	c.groupKeys[index].mutex.RLock()
-	time.Unix(int64(*g), 0)
 	v := c.groupKeys[index].LastUpdateTime.Before(time.Unix(int64(*g), 0))
 	c.groupKeys[index].mutex.RUnlock()
 	return v

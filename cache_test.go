@@ -87,3 +87,47 @@ func TestTieredCache(t *testing.T) {
 	}
 
 }
+
+func TestGet(t *testing.T) {
+	GlobalCacheMonitor = NewMonitorV2(time.Minute)
+	c := NewGoCache(cache.New(5*time.Minute, time.Minute), time.Minute, "test")
+	ctx = ContextWithCache(ctx, c)
+	key := "test_key"
+	group := "test_group"
+
+	// Test case: Group key has been updated
+	//
+	_ = Set[int](ctx, group, key, 10)
+	_ = SetWithExpiration[int64](ctx, time.Minute, GroupPrefix, group, time.Now().Add(time.Second*5).Unix())
+	_, err := Get[int](ctx, group, key)
+	if !errors.Is(err, ErrCacheUpdated) {
+		t.Fatalf("expected ErrCacheUpdated, got %v", err)
+	}
+	_ = Set[int](ctx, group, key, 10)
+
+	// Test case: Cache miss
+	_, err = Get[int](ctx, group, key+"2")
+	if err == nil || err.Error() != "cache missed" {
+		t.Fatalf("expected cache miss, got %v", err)
+	}
+
+	expectedInt := 123
+	_ = Set[int](ctx, group, key, expectedInt)
+	result, err := Get[int](ctx, group, key)
+	if err != nil {
+		t.Fatalf("expected no error, got %v", err)
+	}
+	if *result != expectedInt {
+		t.Fatalf("expected %v, got %v", expectedInt, *result)
+	}
+	// Test case: Struct retrieval
+	expectedStruct := Wrapper[int]{Data: 456}
+	_ = Set[Wrapper[int]](ctx, group, key, expectedStruct)
+	resultStruct, err := Get[Wrapper[int]](ctx, group, key)
+	if err != nil {
+		t.Fatalf("expected no error, got %v", err)
+	}
+	if resultStruct.Data != expectedStruct.Data {
+		t.Fatalf("expected %v, got %v", expectedStruct.Data, *resultStruct)
+	}
+}

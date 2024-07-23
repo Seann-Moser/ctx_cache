@@ -4,9 +4,9 @@ import (
 	"context"
 	"crypto/md5"
 	"encoding/base64"
+	"encoding/json"
 	"errors"
 	"fmt"
-	json "github.com/goccy/go-json"
 	"strings"
 	"time"
 
@@ -50,11 +50,13 @@ func GetMD5Hash(text string) string {
 }
 
 func GetKey[T any](key ...string) string {
-	return fmt.Sprintf("%s_%s", GetTypeReflect[T](*new(T)), strings.Join(key, "_"))
-	//return GetMD5Hash(fmt.Sprintf("%T_%s", *new(T), strings.Join(key, "_")))
+	k := fmt.Sprintf("%s_%s", GetTypeReflect[T](*new(T)), strings.Join(key, "_"))
+	return k
+	//return GetMD5Hash()
 }
 
 func Set[T any](ctx context.Context, group, key string, data T) error {
+
 	err := GetCacheFromContext(ctx).SetCache(ctx, group, GetKey[T](group, key), Wrapper[T]{Data: data}.Get())
 	if err != nil {
 		return err
@@ -110,6 +112,7 @@ func Get[T any](ctx context.Context, group, key string) (*T, error) {
 			return nil, ErrCacheUpdated
 		}
 	}
+
 	data, err := GetCacheFromContext(ctx).GetCache(ctx, group, GetKey[T](group, key))
 	if err != nil {
 		return nil, err

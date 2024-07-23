@@ -53,7 +53,7 @@ func ConvertBytesToType[T any](data []byte) (T, error) {
 	switch GetTypeReflect(result) {
 	case "int":
 		var intValue int64
-		//intValue, err = strconv.ParseInt(string(data), 10, 64)
+		intValue, err = strconv.ParseInt(string(data), 10, 64)
 		result = any(int(intValue)).(T)
 	case "int8":
 		var intValue int64

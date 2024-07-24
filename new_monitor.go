@@ -4,6 +4,7 @@ import (
 	"context"
 	"github.com/spf13/pflag"
 	"github.com/spf13/viper"
+	"strings"
 	"sync"
 	"time"
 )
@@ -49,6 +50,9 @@ func NewMonitorV2(duration time.Duration) CacheMonitor {
 }
 
 func (c *CacheMonitorV2) AddGroupKeys(ctx context.Context, group string, newKeys ...string) error {
+	if strings.EqualFold(group, GroupPrefix) || group == "" {
+		return nil
+	}
 	index := c.SetGroupIndex(group)
 	if index < 0 {
 		return nil
@@ -63,6 +67,9 @@ func (c *CacheMonitorV2) AddGroupKeys(ctx context.Context, group string, newKeys
 }
 
 func (c *CacheMonitorV2) HasGroupKeyBeenUpdated(ctx context.Context, group string) bool {
+	if strings.EqualFold(group, GroupPrefix) || group == "" {
+		return false
+	}
 	index := c.GetGroupIndex(group)
 	if index < 0 {
 		return false
@@ -79,6 +86,9 @@ func (c *CacheMonitorV2) HasGroupKeyBeenUpdated(ctx context.Context, group strin
 }
 
 func (c *CacheMonitorV2) GetGroupKeys(ctx context.Context, group string) (map[string]struct{}, error) {
+	if strings.EqualFold(group, GroupPrefix) || group == "" {
+		return nil, nil
+	}
 	index := c.GetGroupIndex(group)
 	if index < 0 {
 		return make(map[string]struct{}), nil
@@ -87,6 +97,9 @@ func (c *CacheMonitorV2) GetGroupKeys(ctx context.Context, group string) (map[st
 }
 
 func (c *CacheMonitorV2) DeleteCache(ctx context.Context, group string) error {
+	if strings.EqualFold(group, GroupPrefix) || group == "" {
+		return nil
+	}
 	index := c.GetGroupIndex(group)
 	if index < 0 {
 		return nil
@@ -95,8 +108,7 @@ func (c *CacheMonitorV2) DeleteCache(ctx context.Context, group string) error {
 		return nil
 	}
 	c.groupKeys[index].mutex.Lock()
-	c.groupKeys[index].keys = make(map[string]struct{})
-	c.groupKeys[index].LastUpdateTime = time.UnixMicro(0)
+	defer c.groupKeys[index].mutex.Unlock()
 	wg := sync.WaitGroup{}
 
 	ch := make(chan string)
@@ -119,11 +131,15 @@ func (c *CacheMonitorV2) DeleteCache(ctx context.Context, group string) error {
 		}()
 	}
 	wg.Wait()
-	c.groupKeys[index].mutex.Unlock()
+	c.groupKeys[index].keys = make(map[string]struct{})
+	c.groupKeys[index].LastUpdateTime = time.UnixMicro(0)
 	return Delete[int64](ctx, GroupPrefix, group)
 }
 
 func (c *CacheMonitorV2) UpdateCache(ctx context.Context, group string, key string) error {
+	if strings.EqualFold(group, GroupPrefix) || group == "" {
+		return nil
+	}
 	index := c.SetGroupIndex(group)
 	if index < 0 {
 		return nil

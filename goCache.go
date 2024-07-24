@@ -2,7 +2,6 @@ package ctx_cache
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"time"
 
@@ -60,20 +59,20 @@ func (c *GoCache) Close() {
 
 }
 func (c *GoCache) SetCacheWithExpiration(ctx context.Context, cacheTimeout time.Duration, group, key string, item interface{}) error {
-	var err error
-	s := c.cacheTags.record(ctx, CacheCmdSET, func(err error) CacheStatus {
-		if errors.Is(err, ErrCacheMiss) {
-			return CacheStatusMISSING
-		}
-		if err != nil {
-			return CacheStatusERR
-		}
-		return CacheStatusOK
-	})
-
-	defer func() {
-		s(err)
-	}()
+	//var err error
+	//s := c.cacheTags.record(ctx, CacheCmdSET, func(err error) CacheStatus {
+	//	if errors.Is(err, ErrCacheMiss) {
+	//		return CacheStatusMISSING
+	//	}
+	//	if err != nil {
+	//		return CacheStatusERR
+	//	}
+	//	return CacheStatusOK
+	//})
+	//
+	//defer func() {
+	//	s(err)
+	//}()
 
 	c.cacher.Set(key, item, cacheTimeout)
 	return nil

@@ -6,6 +6,7 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"strings"
 	"time"
 
@@ -21,6 +22,7 @@ const (
 var (
 	ErrCacheMiss    = errors.New("cache missed")
 	ErrCacheUpdated = errors.New("cache updated")
+	ErrCacheGet     = errors.New("cache get")
 	DefaultCache    Cache
 	UseHash         bool = false
 )
@@ -63,7 +65,7 @@ func Set[T any](ctx context.Context, group, key string, data T) error {
 	if err != nil {
 		return err
 	}
-	if strings.EqualFold(group, GroupPrefix) {
+	if strings.EqualFold(group, GroupPrefix) || group == "" {
 		return nil
 	}
 	return GlobalCacheMonitor.UpdateCache(ctx, group, key)
@@ -78,12 +80,16 @@ func DeleteKey(ctx context.Context, key string) error {
 }
 
 func SetWithExpiration[T any](ctx context.Context, cacheTimeout time.Duration, group, key string, data T) error {
-	err := GetCacheFromContext(ctx).SetCacheWithExpiration(ctx, cacheTimeout, group, GetKey[T](group, key), Wrapper[T]{Data: data}.Get())
+	c := GetCacheFromContext(ctx)
+	k := GetKey[T](group, key)
+	w := Wrapper[T]{Data: data}.Get()
+
+	err := c.SetCacheWithExpiration(ctx, cacheTimeout, group, k, w)
 	if err != nil {
 		ctxLogger.Debug(ctx, "failed setting cache", zap.String("group", group), zap.String("key", key))
 		return err
 	}
-	if strings.EqualFold(group, GroupPrefix) {
+	if strings.EqualFold(group, GroupPrefix) || group == "" {
 		return nil
 	}
 	ctxLogger.Debug(ctx, "set cache", zap.String("group", group), zap.String("key", key))
@@ -144,8 +150,7 @@ func GetSet[T any](ctx context.Context, cacheTimeout time.Duration, group, key s
 			var tmp T
 			return tmp, err
 		}
-		_ = SetWithExpiration[T](ctx, cacheTimeout, group, key, nv)
-		return nv, nil
+		return nv, SetWithExpiration[T](ctx, cacheTimeout, group, key, nv)
 	} else {
 		return *v, nil
 	}
@@ -154,10 +159,10 @@ func GetSetP[T any](ctx context.Context, cacheTimeout time.Duration, group, key 
 	if v, err := Get[T](ctx, group, key); errors.Is(err, ErrCacheMiss) || errors.Is(err, ErrCacheUpdated) || v == nil {
 		nv, err := gtr(ctx)
 		if err != nil {
-			return nil, err
+			return nil, fmt.Errorf("failed getting cache value(group:%s, key:%s): %w", group, key, err)
 		}
 		if nv == nil {
-			return nil, nil
+			return nil, ErrCacheGet
 		}
 		_ = SetWithExpiration[T](ctx, cacheTimeout, group, key, *nv)
 		return nv, nil

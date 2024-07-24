@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"github.com/patrickmn/go-cache"
+	"sync"
 	"testing"
 	"time"
 )
@@ -18,6 +19,7 @@ func benchmarkCacheMonitor_AddGroupKeys(b *testing.B, monitor CacheMonitor) {
 
 func benchmarkCacheMonitor_HasGroupKeyBeenUpdated(b *testing.B, monitor CacheMonitor) {
 	monitor.AddGroupKeys(ctx, "group1", "key1", "key2", "key3")
+	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
 		monitor.HasGroupKeyBeenUpdated(ctx, "group1")
 	}
@@ -25,6 +27,7 @@ func benchmarkCacheMonitor_HasGroupKeyBeenUpdated(b *testing.B, monitor CacheMon
 
 func benchmarkCacheMonitor_GetGroupKeys(b *testing.B, monitor CacheMonitor) {
 	monitor.AddGroupKeys(ctx, "group1", "key1", "key2", "key3")
+	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
 		monitor.GetGroupKeys(ctx, "group1")
 	}
@@ -32,6 +35,7 @@ func benchmarkCacheMonitor_GetGroupKeys(b *testing.B, monitor CacheMonitor) {
 
 func benchmarkCacheMonitor_DeleteCache(b *testing.B, monitor CacheMonitor) {
 	monitor.AddGroupKeys(ctx, "group1", "key1", "key2", "key3")
+	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
 		monitor.DeleteCache(ctx, "group1")
 	}
@@ -39,30 +43,31 @@ func benchmarkCacheMonitor_DeleteCache(b *testing.B, monitor CacheMonitor) {
 
 func benchmarkCacheMonitor_UpdateCache(b *testing.B, monitor CacheMonitor) {
 	monitor.AddGroupKeys(ctx, "group1", "key1", "key2", "key3")
+	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
 		monitor.UpdateCache(ctx, "group1", "key4")
 	}
 }
 
-func BenchmarkNewMonitorCacheMonitor(b *testing.B) {
-	ctx = ContextWithCache(ctx, NewGoCache(cache.New(5*time.Minute, time.Minute), time.Minute, ""))
-	monitor := NewMonitor()
-	b.Run("AddGroupKeys", func(b *testing.B) {
-		benchmarkCacheMonitor_AddGroupKeys(b, monitor)
-	})
-	b.Run("HasGroupKeyBeenUpdated", func(b *testing.B) {
-		benchmarkCacheMonitor_HasGroupKeyBeenUpdated(b, monitor)
-	})
-	b.Run("GetGroupKeys", func(b *testing.B) {
-		benchmarkCacheMonitor_GetGroupKeys(b, monitor)
-	})
-	b.Run("DeleteCache", func(b *testing.B) {
-		benchmarkCacheMonitor_DeleteCache(b, monitor)
-	})
-	b.Run("UpdateCache", func(b *testing.B) {
-		benchmarkCacheMonitor_UpdateCache(b, monitor)
-	})
-}
+//func BenchmarkNewMonitorCacheMonitor(b *testing.B) {
+//	ctx = ContextWithCache(ctx, NewGoCache(cache.New(5*time.Minute, time.Minute), time.Minute, ""))
+//	monitor := NewMonitor()
+//	b.Run("AddGroupKeys", func(b *testing.B) {
+//		benchmarkCacheMonitor_AddGroupKeys(b, monitor)
+//	})
+//	b.Run("HasGroupKeyBeenUpdated", func(b *testing.B) {
+//		benchmarkCacheMonitor_HasGroupKeyBeenUpdated(b, monitor)
+//	})
+//	b.Run("GetGroupKeys", func(b *testing.B) {
+//		benchmarkCacheMonitor_GetGroupKeys(b, monitor)
+//	})
+//	b.Run("DeleteCache", func(b *testing.B) {
+//		benchmarkCacheMonitor_DeleteCache(b, monitor)
+//	})
+//	b.Run("UpdateCache", func(b *testing.B) {
+//		benchmarkCacheMonitor_UpdateCache(b, monitor)
+//	})
+//}
 
 func BenchmarkNewMonitorV2Monitor(b *testing.B) {
 	ctx = ContextWithCache(ctx, NewGoCache(cache.New(5*time.Minute, time.Minute), time.Minute, ""))
@@ -192,4 +197,55 @@ func BenchmarkGet_MediumCache(b *testing.B) {
 
 func BenchmarkGet_LargeCache(b *testing.B) {
 	benchmarkGet(b, "test_group", "test_key", 10000)
+}
+
+// BenchmarkSyncMap benchmarks sync.Map with concurrent access
+func BenchmarkSyncMap(b *testing.B) {
+	var m sync.Map
+
+	b.RunParallel(func(pb *testing.PB) {
+		for pb.Next() {
+			m.Store("key", 42)
+			m.Load("key")
+			m.Delete("key")
+		}
+	})
+}
+
+// MutexMap is a map protected by a sync.Mutex
+type MutexMap struct {
+	mu sync.RWMutex
+	m  map[string]int
+}
+
+func (mm *MutexMap) Store(key string, value int) {
+	mm.mu.Lock()
+	defer mm.mu.Unlock()
+	mm.m[key] = value
+}
+
+func (mm *MutexMap) Load(key string) (int, bool) {
+	mm.mu.RLock()
+	defer mm.mu.RUnlock()
+	value, ok := mm.m[key]
+	return value, ok
+}
+
+func (mm *MutexMap) Delete(key string) {
+	mm.mu.Lock()
+	defer mm.mu.Unlock()
+	delete(mm.m, key)
+}
+
+// BenchmarkMutexMap benchmarks map protected by sync.Mutex with concurrent access
+func BenchmarkMutexMap(b *testing.B) {
+	mm := &MutexMap{m: make(map[string]int)}
+
+	b.RunParallel(func(pb *testing.PB) {
+		for pb.Next() {
+			mm.Store("key", 42)
+			mm.Load("key")
+			mm.Delete("key")
+		}
+	})
 }

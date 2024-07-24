@@ -131,3 +131,84 @@ func TestGet(t *testing.T) {
 		t.Fatalf("expected %v, got %v", expectedStruct.Data, *resultStruct)
 	}
 }
+
+//func FuzzGet(f *testing.F) {
+//	//GlobalCacheMonitor = NewMonitorV2(time.Minute)
+//	//c := NewGoCache(cache.New(5*time.Minute, time.Minute), time.Minute, "test")
+//	//ctx := ContextWithCache(ctx, c)
+//	//f.Add("test_key", "test_group", 10) // Adding seed corpus to start fuzzing from
+//
+//	//f.Fuzz(func(t *testing.T, key string, group string, value int) {
+//	//
+//	//	// Test case: Group key has been updated
+//	//	_ = Set[int](ctx, group, key, value)
+//	//	_ = SetWithExpiration[int64](ctx, time.Minute, GroupPrefix, group, time.Now().Add(time.Second*5).Unix())
+//	//	_, err := Get[int](ctx, group, key)
+//	//	if !errors.Is(err, ErrCacheUpdated) {
+//	//		t.Fatalf("expected ErrCacheUpdated, got %v", err)
+//	//	}
+//	//	_ = Set[int](ctx, group, key, value)
+//	//
+//	//	// Test case: Cache miss
+//	//	_, err = Get[int](ctx, group, key+"2")
+//	//	if err == nil || err.Error() != "cache missed" {
+//	//		t.Fatalf("expected cache miss, got %v", err)
+//	//	}
+//	//
+//	//	expectedInt := value
+//	//	_ = Set[int](ctx, group, key, expectedInt)
+//	//	result, err := Get[int](ctx, group, key)
+//	//	if err != nil {
+//	//		t.Fatalf("expected no error, got %v", err)
+//	//	}
+//	//	if *result != expectedInt {
+//	//		t.Fatalf("expected %v, got %v", expectedInt, *result)
+//	//	}
+//	//
+//	//	// Test case: Struct retrieval
+//	//	expectedStruct := Wrapper[int]{Data: value}
+//	//	_ = Set[Wrapper[int]](ctx, group, key, expectedStruct)
+//	//	resultStruct, err := Get[Wrapper[int]](ctx, group, key)
+//	//	if err != nil {
+//	//		t.Fatalf("expected no error, got %v", err)
+//	//	}
+//	//	if resultStruct.Data != expectedStruct.Data {
+//	//		t.Fatalf("expected %v, got %v", expectedStruct.Data, *resultStruct)
+//	//	}
+//	//})
+//}
+
+// Dummy getter function to use in GetSet
+func dummyGetter(ctx context.Context) (int, error) {
+	return 42, nil
+}
+
+// Fuzz test for GetSet function
+func FuzzGetSet(f *testing.F) {
+	// Seed corpus
+	f.Add("test_group", "test_key")
+	GlobalCacheMonitor = NewMonitorV2(time.Minute)
+	c := NewGoCache(cache.New(5*time.Minute, time.Minute), time.Minute, "test")
+	ctx := ContextWithCache(ctx, c)
+	f.Fuzz(func(t *testing.T, group, key string) {
+
+		// Attempt to GetSet with various inputs
+		// Using int as a generic type T for simplicity
+		result, err := GetSet[int](ctx, time.Second, group, key, dummyGetter)
+		if err != nil {
+			t.Fatalf("expected no error, got %v", err)
+		}
+		if result != 42 {
+			t.Fatalf("expected 42, got %v", result)
+		}
+
+		// Cache should now have the value, check if it's retrievable
+		cachedResult, err := Get[int](ctx, group, key)
+		if err != nil {
+			t.Fatalf("expected no error when getting from cache, got %v", err)
+		}
+		if *cachedResult != 42 {
+			t.Fatalf("expected cached value 42, got %v", *cachedResult)
+		}
+	})
+}

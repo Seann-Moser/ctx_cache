@@ -17,7 +17,7 @@ func main() {
 	ctx := context.Background()
 	testDuration := 5 * time.Minute
 	workers := 10
-	logger, err := ctxLogger.NewLogger(true, "debug")
+	logger, err := ctxLogger.NewLogger(true, "debug", true)
 	if err != nil {
 		panic(err)
 	}

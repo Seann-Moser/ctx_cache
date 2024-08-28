@@ -19,7 +19,7 @@ type CacheTestMonitor struct {
 
 func TestMonitor(t *testing.T) {
 	ctx := context.Background()
-	GlobalCacheMonitor = NewMonitor()
+	GlobalCacheMonitor = NewMonitor(time.Minute)
 	workers := 20
 	cacheFunctions := []*CacheTestMonitor{
 		{
@@ -54,7 +54,7 @@ func TestMonitor(t *testing.T) {
 		go func() {
 			defer wg.Done()
 			for _, cacheFunction := range cacheFunctions {
-				e, err := GetSet[string](ctx, 1*time.Minute, cacheFunction.Group, cacheFunction.Key, NewD(cacheFunction))
+				e, err := GetSet[string](ctx, 1*time.Minute, cacheFunction.Group, cacheFunction.Key, false, NewD(cacheFunction))
 				if err != nil {
 					t.Errorf("failed getting cache %s %s Expected:%s", cacheFunction.Group, cacheFunction.Key, cacheFunction.Expected)
 				}

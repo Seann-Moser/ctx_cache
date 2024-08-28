@@ -100,6 +100,7 @@ func (c *GoCache) GetCache(ctx context.Context, group, key string) ([]byte, erro
 	if data, found := c.cacher.Get(key); !found {
 		return nil, ErrCacheMiss
 	} else {
+		//return nil, ErrCacheMiss
 		return ConvertToBytes(data)
 	}
 }

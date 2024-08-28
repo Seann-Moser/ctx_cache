@@ -5,7 +5,7 @@ import (
 	"time"
 )
 
-var GlobalCacheMonitor CacheMonitor = NewMonitorV3(5 * time.Minute)
+var GlobalCacheMonitor CacheMonitor = NewMonitor(5 * time.Minute)
 
 const GroupPrefix = "[CTX_CACHE_GROUP]"
 

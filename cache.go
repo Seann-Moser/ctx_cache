@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/Seann-Moser/go-serve/pkg/ctxLogger"
+	jsoniter "github.com/json-iterator/go"
 	"github.com/patrickmn/go-cache"
 	"go.uber.org/zap"
 )
@@ -114,16 +115,29 @@ func (w Wrapper[T]) Get() interface{} {
 	return w
 }
 
-func Get[T any](ctx context.Context, group, key string) (*T, error) {
-	if group != GroupPrefix && group != "" {
-		if GlobalCacheMonitor.HasGroupKeyBeenUpdated(ctx, group) {
-			return nil, ErrCacheUpdated
+func UnmarshalWrappert[T any](data []byte) (*T, error) {
+	var output Wrapper[T]
+	err := jsoniter.Unmarshal(data, &output)
+	if err != nil {
+		err = json.Unmarshal(data, &output)
+		if err != nil {
+			return nil, err
 		}
 	}
-	k := GetKey[T](group, key)
+	return &output.Data, nil
+}
+
+func Get[T any](ctx context.Context, group, key string) (*T, error) {
+	//if group != GroupPrefix && group != "" {
+	//
+	//	if GlobalCacheMonitor.HasGroupKeyBeenUpdated(ctx, group) {
+	//		return nil, ErrCacheUpdated
+	//	}
+	//}
+	key = GetKey[T](group, key)
 	c := GetCacheFromContext(ctx)
 
-	data, err := c.GetCache(ctx, group, k)
+	data, err := c.GetCache(ctx, group, key)
 	if err != nil {
 		return nil, err
 	}
@@ -135,12 +149,13 @@ func Get[T any](ctx context.Context, group, key string) (*T, error) {
 		}
 		return &t, nil
 	}
-	var output Wrapper[T]
-	err = json.Unmarshal(data, &output)
-	if err != nil {
-		return nil, err
-	}
-	return &output.Data, nil
+	return UnmarshalWrappert[T](data)
+	//var output Wrapper[T]
+	//err = json.Unmarshal(data, &output)
+	//if err != nil {
+	//	return nil, err
+	//}
+	//return &output.Data, nil
 }
 
 func GetSet[T any](ctx context.Context, cacheTimeout time.Duration, group, key string, refresh bool, gtr func(ctx context.Context) (T, error)) (T, error) {

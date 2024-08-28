@@ -11,37 +11,49 @@ func ConvertToBytes(data interface{}) ([]byte, error) {
 	case string:
 		return []byte(v), nil
 	case int:
-		return []byte(strconv.Itoa(v)), nil
-	case int8:
-		return []byte(strconv.Itoa(int(v))), nil
-	case int16:
-		return []byte(strconv.Itoa(int(v))), nil
-	case int32:
-		return []byte(strconv.Itoa(int(v))), nil
-	case int64:
-		return []byte(strconv.FormatInt(v, 10)), nil
-	case uint:
-		return []byte(strconv.FormatUint(uint64(v), 10)), nil
-	case uint8:
-		return []byte(strconv.Itoa(int(v))), nil
-	case uint16:
-		return []byte(strconv.FormatUint(uint64(v), 10)), nil
-	case uint32:
-		return []byte(strconv.FormatUint(uint64(v), 10)), nil
-	case uint64:
-		return []byte(strconv.FormatUint(v, 10)), nil
+		return strconv.AppendInt(nil, int64(v), 10), nil
+	case int8, int16, int32, int64:
+		return strconv.AppendInt(nil, toInt64(v), 10), nil
+	case uint, uint8, uint16, uint32, uint64:
+		return strconv.AppendUint(nil, toUint64(v), 10), nil
 	case float32:
-		return []byte(strconv.FormatFloat(float64(v), 'f', -1, 32)), nil
+		return strconv.AppendFloat(nil, float64(v), 'f', -1, 32), nil
 	case float64:
-		return []byte(strconv.FormatFloat(v, 'f', -1, 64)), nil
+		return strconv.AppendFloat(nil, v, 'f', -1, 64), nil
 	case bool:
-		return []byte(strconv.FormatBool(v)), nil
+		return strconv.AppendBool(nil, v), nil
 	default:
-		b, err := json.Marshal(data)
-		if err != nil {
-			return nil, err
-		}
-		return b, nil
+		return json.Marshal(data)
+	}
+}
+
+func toInt64(data interface{}) int64 {
+	switch v := data.(type) {
+	case int8:
+		return int64(v)
+	case int16:
+		return int64(v)
+	case int32:
+		return int64(v)
+	case int64:
+		return v
+	default:
+		return 0
+	}
+}
+
+func toUint64(data interface{}) uint64 {
+	switch v := data.(type) {
+	case uint8:
+		return uint64(v)
+	case uint16:
+		return uint64(v)
+	case uint32:
+		return uint64(v)
+	case uint64:
+		return v
+	default:
+		return 0
 	}
 }
 

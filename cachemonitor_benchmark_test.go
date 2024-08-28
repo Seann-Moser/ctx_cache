@@ -71,7 +71,7 @@ func benchmarkCacheMonitor_UpdateCache(b *testing.B, monitor CacheMonitor) {
 
 func BenchmarkNewMonitorV2Monitor(b *testing.B) {
 	ctx = ContextWithCache(ctx, NewGoCache(cache.New(5*time.Minute, time.Minute), time.Minute, ""))
-	monitor := NewMonitorV2(5 * time.Minute)
+	monitor := NewMonitor(5 * time.Minute)
 	b.Run("AddGroupKeys", func(b *testing.B) {
 		benchmarkCacheMonitor_AddGroupKeys(b, monitor)
 	})
@@ -154,6 +154,36 @@ func BenchmarkConvertBytesToType(b *testing.B) {
 	})
 }
 
+func BenchmarkConvertToBytes(b *testing.B) {
+	// Test cases
+	tests := []struct {
+		name string
+		data interface{}
+	}{
+		{"String", "TestString"},
+		{"Int", 12345},
+		{"Int64", int64(123456789)},
+		{"Uint64", uint64(123456789)},
+		{"Float32", float32(12345.6789)},
+		{"Float64", 12345.6789},
+		{"BoolTrue", true},
+		{"BoolFalse", false},
+		{"ComplexStruct", struct {
+			Field1 string
+			Field2 int
+			Field3 bool
+		}{"value", 10, true}},
+	}
+
+	for _, tt := range tests {
+		b.Run(tt.name, func(b *testing.B) {
+			for i := 0; i < b.N; i++ {
+				_, _ = ConvertToBytes(tt.data)
+			}
+		})
+	}
+}
+
 func benchmarkGet(b *testing.B, group string, key string, cacheSize int) {
 	c := NewGoCache(cache.New(5*time.Minute, time.Minute), time.Minute, "test")
 	ctx = ContextWithCache(context.Background(), c)
@@ -173,17 +203,20 @@ func benchmarkGet(b *testing.B, group string, key string, cacheSize int) {
 }
 
 func BenchmarkGet_SmallCacheV2(b *testing.B) {
-	GlobalCacheMonitor = NewMonitorV2(time.Minute)
+	GlobalCacheMonitor = NewMonitor(time.Minute)
+	go GlobalCacheMonitor.Start(context.Background())
 	benchmarkGet(b, "test_group", "test_key", 100)
 }
 
 func BenchmarkGet_MediumCacheV2(b *testing.B) {
-	GlobalCacheMonitor = NewMonitorV2(time.Minute)
+	GlobalCacheMonitor = NewMonitor(time.Minute)
+	go GlobalCacheMonitor.Start(context.Background())
 	benchmarkGet(b, "test_group", "test_key", 1000)
 }
 
 func BenchmarkGet_LargeCacheV2(b *testing.B) {
-	GlobalCacheMonitor = NewMonitorV2(time.Minute)
+	GlobalCacheMonitor = NewMonitor(time.Minute)
+	go GlobalCacheMonitor.Start(context.Background())
 	benchmarkGet(b, "test_group", "test_key", 10000)
 }
 
@@ -248,4 +281,14 @@ func BenchmarkMutexMap(b *testing.B) {
 			mm.Delete("key")
 		}
 	})
+}
+
+func BenchmarkGetKey(b *testing.B) {
+	key1 := "KeyPart1"
+	key2 := "KeyPart2"
+
+	// Running the benchmark
+	for i := 0; i < b.N; i++ {
+		_ = GetKey[string](key1, key2)
+	}
 }

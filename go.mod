@@ -6,6 +6,7 @@ require (
 	github.com/Seann-Moser/go-serve v0.9.12
 	github.com/Seann-Moser/ociredis v1.0.0
 	github.com/goccy/go-json v0.10.3
+	github.com/json-iterator/go v1.1.12
 	github.com/orijtech/gomemcache v0.0.1
 	github.com/patrickmn/go-cache v2.1.0+incompatible
 	github.com/spf13/pflag v1.0.5
@@ -22,6 +23,8 @@ require (
 	github.com/hashicorp/hcl v1.0.0 // indirect
 	github.com/magiconair/properties v1.8.7 // indirect
 	github.com/mitchellh/mapstructure v1.5.0 // indirect
+	github.com/modern-go/concurrent v0.0.0-20180306012644-bacd9c7ef1dd // indirect
+	github.com/modern-go/reflect2 v1.0.2 // indirect
 	github.com/pelletier/go-toml/v2 v2.2.2 // indirect
 	github.com/sagikazarmark/locafero v0.6.0 // indirect
 	github.com/sagikazarmark/slog-shim v0.1.0 // indirect

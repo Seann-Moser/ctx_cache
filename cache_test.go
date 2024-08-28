@@ -54,7 +54,7 @@ func TestTieredCache(t *testing.T) {
 			ExpectedOutput: "test",
 		},
 	}
-	GlobalCacheMonitor = NewMonitor()
+	GlobalCacheMonitor = NewMonitor(time.Minute)
 	ctx := context.Background()
 	for _, tc := range testCases {
 		t.Run(tc.Name, func(t *testing.T) {
@@ -89,7 +89,7 @@ func TestTieredCache(t *testing.T) {
 }
 
 func TestGet(t *testing.T) {
-	GlobalCacheMonitor = NewMonitorV2(time.Minute)
+	GlobalCacheMonitor = NewMonitor(time.Minute)
 	c := NewGoCache(cache.New(5*time.Minute, time.Minute), time.Minute, "test")
 	ctx = ContextWithCache(ctx, c)
 	key := "test_key"
@@ -187,14 +187,15 @@ func dummyGetter(ctx context.Context) (int, error) {
 func FuzzGetSet(f *testing.F) {
 	// Seed corpus
 	f.Add("test_group", "test_key")
-	GlobalCacheMonitor = NewMonitorV2(time.Minute)
+	GlobalCacheMonitor = NewMonitor(time.Minute)
+	GlobalCacheMonitor.Start(context.Background())
 	c := NewGoCache(cache.New(5*time.Minute, time.Minute), time.Minute, "test")
 	ctx := ContextWithCache(ctx, c)
 	f.Fuzz(func(t *testing.T, group, key string) {
 
 		// Attempt to GetSet with various inputs
 		// Using int as a generic type T for simplicity
-		result, err := GetSet[int](ctx, time.Second, group, key, dummyGetter)
+		result, err := GetSet[int](ctx, time.Second, group, key, false, dummyGetter)
 		if err != nil {
 			t.Fatalf("expected no error, got %v", err)
 		}

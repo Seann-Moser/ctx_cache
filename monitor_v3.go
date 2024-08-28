@@ -27,7 +27,7 @@ type CacheMonitorV3 struct {
 
 func MonitorV3Flags(prefix string) *pflag.FlagSet {
 	fs := pflag.NewFlagSet("monitorv3", pflag.ExitOnError)
-	fs.Int("monitor-workers", 10, "")
+	fs.Int("monitor-workers", 20, "")
 	fs.Duration("monitor-cache-duration", 10*time.Minute, "")
 	return fs
 }
@@ -65,12 +65,13 @@ func (c *CacheMonitorV3) AddGroupKeys(ctx context.Context, group string, newKeys
 		c.groups[group].Store(key, struct{}{})
 
 	}
-	output := map[string]struct{}{}
-	c.groups[group].Range(func(key, value any) bool {
-		output[key.(string)] = struct{}{}
-		return true
-	})
-	return SetWithExpiration[map[string]struct{}](ctx, 60*time.Minute, GroupPrefix, group, output)
+	//output := map[string]struct{}{}
+	//c.groups[group].Range(func(key, value any) bool {
+	//	output[key.(string)] = struct{}{}
+	//	return true
+	//})
+	//return SetWithExpiration[map[string]struct{}](ctx, 60*time.Minute, GroupPrefix, group, output)
+	return nil
 }
 
 func (c *CacheMonitorV3) HasGroupKeyBeenUpdated(ctx context.Context, group string) bool {
@@ -81,13 +82,29 @@ func (c *CacheMonitorV3) HasGroupKeyBeenUpdated(ctx context.Context, group strin
 }
 
 func (c *CacheMonitorV3) GetGroupKeys(ctx context.Context, group string) (map[string]struct{}, error) {
-	//TODO implement me
-	panic("implement me")
+	c.groupMutex.RLock()
+	g, found := c.groups[group]
+	c.groupMutex.RUnlock()
+	if !found {
+		return map[string]struct{}{}, nil
+	}
+	output := map[string]struct{}{}
+	c.groups[group].Range(func(key, value any) bool {
+		output[key.(string)] = struct{}{}
+		return true
+	})
+	return output, nil
 }
 
 func (c *CacheMonitorV3) DeleteCache(ctx context.Context, group string) error {
-	//TODO implement me
-	panic("implement me")
+	ctx, cancel := context.WithTimeout(ctx, 1*time.Second)
+	defer cancel()
+	select {
+	case <-ctx.Done():
+		return ctx.Err()
+	case c.deleteGroupQueue <- group:
+		return nil
+	}
 }
 
 func (c *CacheMonitorV3) UpdateCache(ctx context.Context, group string, key string) error {

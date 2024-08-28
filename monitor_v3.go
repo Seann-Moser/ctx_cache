@@ -12,43 +12,57 @@ import (
 	"time"
 )
 
-type CacheMonitorV3 struct {
+type CacheMonitorImpl struct {
 	groupMutex *sync.RWMutex
 	groups     map[string]*sync.Map
 
 	workers       int
 	cacheDuration time.Duration
 
-	deleteGroupQueue    chan string
-	addGroupQueue       chan map[string][]string
-	localCacheDuaration time.Duration
-	localCache          sync.Map
+	localDeleteCacheQueue chan *groupStruct
+	deleteGroupQueue      chan string
+	addGroupQueue         chan map[string][]string
+	localCacheDuaration   time.Duration
+}
+type groupStruct struct {
+	Group   string
+	Key     string
+	expires time.Time
 }
 
 func MonitorV3Flags(prefix string) *pflag.FlagSet {
-	fs := pflag.NewFlagSet("monitorv3", pflag.ExitOnError)
-	fs.Int("monitor-workers", 10, "")
+	fs := pflag.NewFlagSet("monitor", pflag.ExitOnError)
+	fs.Int("monitor-workers", 0, "")
 	fs.Duration("monitor-cache-duration", 10*time.Minute, "")
 	return fs
 }
 
-func NewMonitorV3WithFlags() CacheMonitor {
-	return &CacheMonitorV3{
-		groupMutex:    &sync.RWMutex{},
-		cacheDuration: viper.GetDuration("monitor-cache-duration"),
-		workers:       viper.GetInt("monitor-workers"),
+func NewMonitorWithFlags() CacheMonitor {
+	return &CacheMonitorImpl{
+		groupMutex:            &sync.RWMutex{},
+		groups:                make(map[string]*sync.Map),
+		workers:               viper.GetInt("monitor-workers"),
+		cacheDuration:         viper.GetDuration("monitor-cache-duration"),
+		localDeleteCacheQueue: make(chan *groupStruct),
+		deleteGroupQueue:      make(chan string),
+		addGroupQueue:         make(chan map[string][]string),
+		localCacheDuaration:   0,
 	}
 }
-func NewMonitorV3(duration time.Duration) CacheMonitor {
-	return &CacheMonitorV2{
-		groupMutex:    &sync.RWMutex{},
-		groups:        make(map[string]uint8),
-		groupKeys:     make([]GroupKeys, 0),
-		cacheDuration: duration,
+func NewMonitor(duration time.Duration) CacheMonitor {
+	return &CacheMonitorImpl{
+		groupMutex:            &sync.RWMutex{},
+		groups:                make(map[string]*sync.Map),
+		workers:               10,
+		cacheDuration:         duration,
+		deleteGroupQueue:      make(chan string),
+		addGroupQueue:         make(chan map[string][]string),
+		localCacheDuaration:   duration,
+		localDeleteCacheQueue: make(chan *groupStruct),
 	}
 }
 
-func (c *CacheMonitorV3) AddGroupKeys(ctx context.Context, group string, newKeys ...string) error {
+func (c *CacheMonitorImpl) AddGroupKeys(ctx context.Context, group string, newKeys ...string) error {
 	if strings.EqualFold(group, GroupPrefix) || group == "" {
 		return nil
 	}
@@ -65,45 +79,91 @@ func (c *CacheMonitorV3) AddGroupKeys(ctx context.Context, group string, newKeys
 		c.groups[group].Store(key, struct{}{})
 
 	}
-	output := map[string]struct{}{}
-	c.groups[group].Range(func(key, value any) bool {
-		output[key.(string)] = struct{}{}
-		return true
-	})
-	return SetWithExpiration[map[string]struct{}](ctx, 60*time.Minute, GroupPrefix, group, output)
+	ctx, cancel := context.WithTimeout(ctx, 1*time.Second)
+	defer cancel()
+	select {
+	case <-ctx.Done():
+		return ctx.Err()
+	case c.localDeleteCacheQueue <- &groupStruct{Group: group, Key: newKeys[0], expires: time.Now().Add(c.cacheDuration)}:
+		return nil
+	}
+
+	//output := map[string]struct{}{}
+	//c.groups[group].Range(func(key, value any) bool {
+	//	output[key.(string)] = struct{}{}
+	//	return true
+	//})
+	//return SetWithExpiration[map[string]struct{}](ctx, 60*time.Minute, GroupPrefix, group, output)
+
 }
 
-func (c *CacheMonitorV3) HasGroupKeyBeenUpdated(ctx context.Context, group string) bool {
-	if strings.EqualFold(group, GroupPrefix) || group == "" {
-		return false
-	}
+func (c *CacheMonitorImpl) HasGroupKeyBeenUpdated(ctx context.Context, group string) bool {
+	//if strings.EqualFold(group, GroupPrefix) || group == "" {
+	//	return false
+	//}
 	return false
 }
 
-func (c *CacheMonitorV3) GetGroupKeys(ctx context.Context, group string) (map[string]struct{}, error) {
-	//TODO implement me
-	panic("implement me")
+func (c *CacheMonitorImpl) GetGroupKeys(ctx context.Context, group string) (map[string]struct{}, error) {
+	c.groupMutex.RLock()
+	g, found := c.groups[group]
+	c.groupMutex.RUnlock()
+	if !found {
+		return map[string]struct{}{}, nil
+	}
+	output := map[string]struct{}{}
+	g.Range(func(key, value any) bool {
+		output[key.(string)] = struct{}{}
+		return true
+	})
+	return output, nil
 }
 
-func (c *CacheMonitorV3) DeleteCache(ctx context.Context, group string) error {
-	//TODO implement me
-	panic("implement me")
+func (c *CacheMonitorImpl) DeleteCache(ctx context.Context, group string) error {
+	ctx, cancel := context.WithTimeout(ctx, 1*time.Second)
+	defer cancel()
+	select {
+	case <-ctx.Done():
+		return ctx.Err()
+	case c.deleteGroupQueue <- group:
+		return nil
+	}
 }
 
-func (c *CacheMonitorV3) UpdateCache(ctx context.Context, group string, key string) error {
+func (c *CacheMonitorImpl) UpdateCache(ctx context.Context, group string, key string) error {
 	if strings.EqualFold(group, GroupPrefix) || group == "" {
 		return nil
 	}
-	c.addGroupQueue <- map[string][]string{group: {key}}
-	return nil
+	return c.DeleteCache(ctx, group)
+	//c.deleteGroupQueue<-
+	//c.addGroupQueue <- map[string][]string{group: {key}}
+	//return nil
 }
 
-func (c *CacheMonitorV3) Close() {
+func (c *CacheMonitorImpl) Close() {
 
 }
 
-func (c *CacheMonitorV3) Start(ctx context.Context) {
+func (c *CacheMonitorImpl) Start(ctx context.Context) {
 	eg, ctx := errgroup.WithContext(ctx)
+	eg.Go(func() error {
+		for {
+			select {
+			case <-ctx.Done():
+				return nil
+			case data := <-c.localDeleteCacheQueue:
+				if time.Now().Before(data.expires) {
+					time.Sleep(data.expires.Sub(time.Now()))
+				}
+				c.groupMutex.RLock()
+				g, found := c.groups[data.Group]
+				c.groupMutex.RUnlock()
+				if found {
+					g.Delete(data.Key)
+				}
+			}
+		}
+	})
 	for i := 0; i < c.workers; i++ {
 		eg.Go(func() error {
 			for {
@@ -127,6 +187,15 @@ func (c *CacheMonitorV3) Start(ctx context.Context) {
 							continue
 						}
 					}
+					c.groupMutex.RLock()
+					g, found := c.groups[group]
+					c.groupMutex.RUnlock()
+					if found {
+						g.Range(func(key interface{}, value interface{}) bool {
+							g.Delete(key)
+							return true
+						})
+					}
 
 				}
 			}
@@ -135,7 +204,7 @@ func (c *CacheMonitorV3) Start(ctx context.Context) {
 	_ = eg.Wait()
 }
 
-func (c *CacheMonitorV3) Record(ctx context.Context, cmd CacheCmd, status Status) func(err error) {
+func (c *CacheMonitorImpl) Record(ctx context.Context, cmd CacheCmd, status Status) func(err error) {
 	return func(err error) {
 
 	}

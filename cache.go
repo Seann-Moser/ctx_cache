@@ -143,7 +143,15 @@ func Get[T any](ctx context.Context, group, key string) (*T, error) {
 	return &output.Data, nil
 }
 
-func GetSet[T any](ctx context.Context, cacheTimeout time.Duration, group, key string, gtr func(ctx context.Context) (T, error)) (T, error) {
+func GetSet[T any](ctx context.Context, cacheTimeout time.Duration, group, key string, refresh bool, gtr func(ctx context.Context) (T, error)) (T, error) {
+	if refresh {
+		nv, err := gtr(ctx)
+		if err != nil {
+			var tmp T
+			return tmp, err
+		}
+		return nv, SetWithExpiration[T](ctx, cacheTimeout, group, key, nv)
+	}
 	if v, err := Get[T](ctx, group, key); errors.Is(err, ErrCacheMiss) || errors.Is(err, ErrCacheUpdated) || v == nil {
 		nv, err := gtr(ctx)
 		if err != nil {
@@ -155,7 +163,17 @@ func GetSet[T any](ctx context.Context, cacheTimeout time.Duration, group, key s
 		return *v, nil
 	}
 }
-func GetSetP[T any](ctx context.Context, cacheTimeout time.Duration, group, key string, gtr func(ctx context.Context) (*T, error)) (*T, error) {
+func GetSetP[T any](ctx context.Context, cacheTimeout time.Duration, group, key string, refresh bool, gtr func(ctx context.Context) (*T, error)) (*T, error) {
+	if refresh {
+		nv, err := gtr(ctx)
+		if err != nil {
+			return nil, fmt.Errorf("failed getting cache value(group:%s, key:%s): %w", group, key, err)
+		}
+		if nv == nil {
+			return nil, ErrCacheGet
+		}
+		return nv, SetWithExpiration[T](ctx, cacheTimeout, group, key, *nv)
+	}
 	if v, err := Get[T](ctx, group, key); errors.Is(err, ErrCacheMiss) || errors.Is(err, ErrCacheUpdated) || v == nil {
 		nv, err := gtr(ctx)
 		if err != nil {
@@ -164,8 +182,7 @@ func GetSetP[T any](ctx context.Context, cacheTimeout time.Duration, group, key 
 		if nv == nil {
 			return nil, ErrCacheGet
 		}
-		_ = SetWithExpiration[T](ctx, cacheTimeout, group, key, *nv)
-		return nv, nil
+		return nv, SetWithExpiration[T](ctx, cacheTimeout, group, key, *nv)
 	} else {
 		return v, nil
 	}

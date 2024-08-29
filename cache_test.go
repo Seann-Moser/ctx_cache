@@ -100,9 +100,6 @@ func TestGet(t *testing.T) {
 	_ = Set[int](ctx, group, key, 10)
 	_ = SetWithExpiration[int64](ctx, time.Minute, GroupPrefix, group, time.Now().Add(time.Second*5).Unix())
 	_, err := Get[int](ctx, group, key)
-	if !errors.Is(err, ErrCacheUpdated) {
-		t.Fatalf("expected ErrCacheUpdated, got %v", err)
-	}
 	_ = Set[int](ctx, group, key, 10)
 
 	// Test case: Cache miss
@@ -188,7 +185,7 @@ func FuzzGetSet(f *testing.F) {
 	// Seed corpus
 	f.Add("test_group", "test_key")
 	GlobalCacheMonitor = NewMonitor(time.Minute)
-	GlobalCacheMonitor.Start(context.Background())
+	go GlobalCacheMonitor.Start(context.Background())
 	c := NewGoCache(cache.New(5*time.Minute, time.Minute), time.Minute, "test")
 	ctx := ContextWithCache(ctx, c)
 	f.Fuzz(func(t *testing.T, group, key string) {

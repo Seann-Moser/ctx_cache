@@ -89,7 +89,6 @@ func (c *CacheKeyWatcher) Start(ctx context.Context) {
 		return
 	}
 	go func() {
-		ctxLogger.Info(ctx, "New Setter")
 		ticker := time.NewTicker(c.Interval)
 		for {
 			select {
@@ -111,7 +110,6 @@ func (c *CacheKeyWatcher) StartWatcher(ctx context.Context) {
 		return
 	}
 	go func() {
-		ctxLogger.Info(ctx, "New Watcher")
 		ticker := time.NewTicker(1 * time.Millisecond)
 		for {
 			select {

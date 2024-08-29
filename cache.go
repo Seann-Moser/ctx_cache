@@ -10,10 +10,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/Seann-Moser/go-serve/pkg/ctxLogger"
 	jsoniter "github.com/json-iterator/go"
 	"github.com/patrickmn/go-cache"
-	"go.uber.org/zap"
 )
 
 const (
@@ -87,13 +85,11 @@ func SetWithExpiration[T any](ctx context.Context, cacheTimeout time.Duration, g
 
 	err := c.SetCacheWithExpiration(ctx, cacheTimeout, group, k, w)
 	if err != nil {
-		ctxLogger.Debug(ctx, "failed setting cache", zap.String("group", group), zap.String("key", key))
 		return err
 	}
 	if strings.EqualFold(group, GroupPrefix) || group == "" {
 		return nil
 	}
-	ctxLogger.Debug(ctx, "set cache", zap.String("group", group), zap.String("key", key))
 	return GlobalCacheMonitor.UpdateCache(ctx, group, key)
 }
 
@@ -136,7 +132,6 @@ func Get[T any](ctx context.Context, group, key string) (*T, error) {
 	//}
 	key = GetKey[T](group, key)
 	c := GetCacheFromContext(ctx)
-
 	data, err := c.GetCache(ctx, group, key)
 	if err != nil {
 		return nil, err

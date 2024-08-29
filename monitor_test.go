@@ -20,6 +20,7 @@ type CacheTestMonitor struct {
 func TestMonitor(t *testing.T) {
 	ctx := context.Background()
 	GlobalCacheMonitor = NewMonitor(time.Minute)
+	go GlobalCacheMonitor.Start(ctx)
 	workers := 20
 	cacheFunctions := []*CacheTestMonitor{
 		{

@@ -2,27 +2,29 @@ package ctx_cache
 
 import (
 	"context"
+	"fmt"
 	"github.com/Seann-Moser/go-serve/pkg/ctxLogger"
+	"github.com/patrickmn/go-cache"
 	"github.com/spf13/pflag"
 	"github.com/spf13/viper"
 	"go.uber.org/zap"
 	"golang.org/x/sync/errgroup"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 )
 
 type CacheMonitorImpl struct {
 	groupMutex *sync.RWMutex
-	groups     map[string]*sync.Map
+	localCache *cache.Cache
 
 	workers       int
 	cacheDuration time.Duration
 
-	localDeleteCacheQueue chan *groupStruct
-	deleteGroupQueue      chan string
-	addGroupQueue         chan map[string][]string
-	localCacheDuaration   time.Duration
+	deleteGroupQueue chan string
+	addGroupQueue    chan map[string]string
+	started          atomic.Bool
 }
 type groupStruct struct {
 	Group   string
@@ -32,33 +34,31 @@ type groupStruct struct {
 
 func MonitorV3Flags(prefix string) *pflag.FlagSet {
 	fs := pflag.NewFlagSet("monitor", pflag.ExitOnError)
-	fs.Int("monitor-workers", 0, "")
+	fs.Int("monitor-workers", 100, "")
+	fs.Int("monitor-queue-size", 1000, "")
 	fs.Duration("monitor-cache-duration", 10*time.Minute, "")
 	return fs
 }
 
 func NewMonitorWithFlags() CacheMonitor {
 	return &CacheMonitorImpl{
-		groupMutex:            &sync.RWMutex{},
-		groups:                make(map[string]*sync.Map),
-		workers:               viper.GetInt("monitor-workers"),
-		cacheDuration:         viper.GetDuration("monitor-cache-duration"),
-		localDeleteCacheQueue: make(chan *groupStruct),
-		deleteGroupQueue:      make(chan string),
-		addGroupQueue:         make(chan map[string][]string),
-		localCacheDuaration:   0,
+		groupMutex:       &sync.RWMutex{},
+		workers:          viper.GetInt("monitor-workers"),
+		cacheDuration:    viper.GetDuration("monitor-cache-duration"),
+		deleteGroupQueue: make(chan string, viper.GetInt("monitor-queue-size")),
+		addGroupQueue:    make(chan map[string]string, viper.GetInt("monitor-queue-size")),
+		started:          atomic.Bool{},
 	}
 }
 func NewMonitor(duration time.Duration) CacheMonitor {
 	return &CacheMonitorImpl{
-		groupMutex:            &sync.RWMutex{},
-		groups:                make(map[string]*sync.Map),
-		workers:               10,
-		cacheDuration:         duration,
-		deleteGroupQueue:      make(chan string),
-		addGroupQueue:         make(chan map[string][]string),
-		localCacheDuaration:   duration,
-		localDeleteCacheQueue: make(chan *groupStruct),
+		groupMutex:       &sync.RWMutex{},
+		workers:          100,
+		localCache:       cache.New(duration, time.Minute),
+		cacheDuration:    duration,
+		deleteGroupQueue: make(chan string, 100000),
+		addGroupQueue:    make(chan map[string]string, 100000),
+		started:          atomic.Bool{},
 	}
 }
 
@@ -66,35 +66,29 @@ func (c *CacheMonitorImpl) AddGroupKeys(ctx context.Context, group string, newKe
 	if strings.EqualFold(group, GroupPrefix) || group == "" {
 		return nil
 	}
-	c.groupMutex.RLock()
-	if _, found := c.groups[group]; !found {
+	//c.groupMutex.RLock()
+	data, found := c.localCache.Get(group)
+	//c.groupMutex.RUnlock()
+
+	if !found {
+		v := make(map[string]struct{}, len(newKeys))
+		c.groupMutex.RLock()
+		for _, newKey := range newKeys {
+			v[newKey] = struct{}{}
+		}
 		c.groupMutex.RUnlock()
-		c.groupMutex.Lock()
-		c.groups[group] = &sync.Map{}
-		c.groupMutex.Unlock()
-	}
-	c.groupMutex.RUnlock()
+		c.localCache.Set(group, v, cache.DefaultExpiration)
 
-	for key := range newKeys {
-		c.groups[group].Store(key, struct{}{})
-
-	}
-	ctx, cancel := context.WithTimeout(ctx, 1*time.Second)
-	defer cancel()
-	select {
-	case <-ctx.Done():
-		return ctx.Err()
-	case c.localDeleteCacheQueue <- &groupStruct{Group: group, Key: newKeys[0], expires: time.Now().Add(c.cacheDuration)}:
 		return nil
 	}
-
-	//output := map[string]struct{}{}
-	//c.groups[group].Range(func(key, value any) bool {
-	//	output[key.(string)] = struct{}{}
-	//	return true
-	//})
-	//return SetWithExpiration[map[string]struct{}](ctx, 60*time.Minute, GroupPrefix, group, output)
-
+	c.groupMutex.Lock()
+	d := data.(map[string]struct{})
+	for _, newKey := range newKeys {
+		d[newKey] = struct{}{}
+	}
+	c.localCache.Set(group, d, cache.DefaultExpiration)
+	c.groupMutex.Unlock()
+	return nil
 }
 
 func (c *CacheMonitorImpl) HasGroupKeyBeenUpdated(ctx context.Context, group string) bool {
@@ -105,39 +99,55 @@ func (c *CacheMonitorImpl) HasGroupKeyBeenUpdated(ctx context.Context, group str
 }
 
 func (c *CacheMonitorImpl) GetGroupKeys(ctx context.Context, group string) (map[string]struct{}, error) {
-	c.groupMutex.RLock()
-	g, found := c.groups[group]
-	c.groupMutex.RUnlock()
-	if !found {
-		return map[string]struct{}{}, nil
+	if data, found := c.localCache.Get(group); found {
+		return data.(map[string]struct{}), nil
 	}
-	output := map[string]struct{}{}
-	g.Range(func(key, value any) bool {
-		output[key.(string)] = struct{}{}
-		return true
-	})
-	return output, nil
+	return map[string]struct{}{}, nil
 }
 
 func (c *CacheMonitorImpl) DeleteCache(ctx context.Context, group string) error {
-	ctx, cancel := context.WithTimeout(ctx, 1*time.Second)
-	defer cancel()
-	select {
-	case <-ctx.Done():
-		return ctx.Err()
-	case c.deleteGroupQueue <- group:
+	if v, f := c.localCache.Get(group); !f || len(v.(map[string]struct{})) == 0 {
 		return nil
 	}
+	if !c.started.Load() {
+		return nil
+	}
+	select {
+	case c.deleteGroupQueue <- group:
+		// Successfully added to the channel
+		return nil
+	default:
+		keys, err := c.GetGroupKeys(ctx, group)
+		if err != nil {
+			return err
+		}
+		c.groupMutex.Lock()
+		for key := range keys {
+			err = DeleteKey(ctx, key)
+			if err != nil {
+				continue
+			}
+		}
+		c.localCache.Set(group, map[string]struct{}{}, cache.DefaultExpiration)
+		c.groupMutex.Unlock()
+	}
+	return nil
 }
 
 func (c *CacheMonitorImpl) UpdateCache(ctx context.Context, group string, key string) error {
-	if strings.EqualFold(group, GroupPrefix) || group == "" {
+	if strings.EqualFold(group, GroupPrefix) || group == "" || !c.started.Load() {
 		return nil
 	}
-	return c.DeleteCache(ctx, group)
-	//c.deleteGroupQueue<-
-	//c.addGroupQueue <- map[string][]string{group: {key}}
-	//return nil
+	select {
+	case c.addGroupQueue <- map[string]string{group: key}:
+		return nil
+	default:
+		if err := c.AddGroupKeys(ctx, group, key); err != nil {
+			return fmt.Errorf("failed adding to cache: %w", err)
+		} else {
+			return nil
+		}
+	}
 }
 
 func (c *CacheMonitorImpl) Close() {
@@ -145,25 +155,11 @@ func (c *CacheMonitorImpl) Close() {
 }
 
 func (c *CacheMonitorImpl) Start(ctx context.Context) {
+	if c.started.Load() {
+		return
+	}
 	eg, ctx := errgroup.WithContext(ctx)
-	eg.Go(func() error {
-		for {
-			select {
-			case <-ctx.Done():
-				return nil
-			case data := <-c.localDeleteCacheQueue:
-				if time.Now().Before(data.expires) {
-					time.Sleep(data.expires.Sub(time.Now()))
-				}
-				c.groupMutex.RLock()
-				g, found := c.groups[data.Group]
-				c.groupMutex.RUnlock()
-				if found {
-					g.Delete(data.Key)
-				}
-			}
-		}
-	})
+	c.started.Store(true)
 	for i := 0; i < c.workers; i++ {
 		eg.Go(func() error {
 			for {
@@ -172,7 +168,7 @@ func (c *CacheMonitorImpl) Start(ctx context.Context) {
 					return nil
 				case groupKeys := <-c.addGroupQueue:
 					for key, value := range groupKeys {
-						_ = c.AddGroupKeys(ctx, key, value...)
+						_ = c.AddGroupKeys(ctx, key, value)
 					}
 				case group := <-c.deleteGroupQueue:
 					keys, err := c.GetGroupKeys(ctx, group)
@@ -180,6 +176,7 @@ func (c *CacheMonitorImpl) Start(ctx context.Context) {
 						ctxLogger.Error(ctx, "failed getting group keys")
 						continue
 					}
+					c.groupMutex.Lock()
 					for key := range keys {
 						err = DeleteKey(ctx, key)
 						if err != nil {
@@ -187,15 +184,8 @@ func (c *CacheMonitorImpl) Start(ctx context.Context) {
 							continue
 						}
 					}
-					c.groupMutex.RLock()
-					g, found := c.groups[group]
-					c.groupMutex.RUnlock()
-					if found {
-						g.Range(func(key interface{}, value interface{}) bool {
-							g.Delete(key)
-							return true
-						})
-					}
+					c.localCache.Set(group, map[string]struct{}{}, cache.DefaultExpiration)
+					c.groupMutex.Unlock()
 
 				}
 			}

@@ -308,3 +308,45 @@ func BenchmarkGetKey(b *testing.B) {
 		_ = GetKey[string](key1, key2)
 	}
 }
+
+// Benchmark for SetWithExpiration
+func BenchmarkSetWithExpiration(b *testing.B) {
+	// Initialize context and parameters for benchmarking
+	ctx := context.Background()
+	cacheTimeout := 5 * time.Minute
+	group := "test-group"
+	key := "test-key"
+	data := "test-data"
+
+	// Run the benchmark
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		err := SetWithExpiration(ctx, cacheTimeout, group, key, data)
+		if err != nil {
+			b.Fatalf("failed to set cache: %v", err)
+		}
+	}
+}
+
+func BenchmarkGetSet(b *testing.B) {
+	// Initialize context, parameters, and gtr function
+	ctx := context.Background()
+	cacheTimeout := 5 * time.Minute
+	group := "test-group"
+	key := "test-key"
+	refresh := false
+
+	gtr := func(ctx context.Context) (string, error) {
+		// Mock data retrieval function
+		return "some-data", nil
+	}
+
+	// Run the benchmark
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		_, err := GetSet(ctx, cacheTimeout, group, key, refresh, gtr)
+		if err != nil {
+			b.Fatalf("failed to get or set cache: %v", err)
+		}
+	}
+}

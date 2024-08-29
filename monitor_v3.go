@@ -89,13 +89,6 @@ func (c *CacheMonitorImpl) AddGroupKeys(ctx context.Context, group string, newKe
 	c.localCache.Set(group, d, cache.DefaultExpiration)
 	c.groupMutex.Unlock()
 	return nil
-	//output := map[string]struct{}{}
-	//c.groups[group].Range(func(key, value any) bool {
-	//	output[key.(string)] = struct{}{}
-	//	return true
-	//})
-	//return SetWithExpiration[map[string]struct{}](ctx, 60*time.Minute, GroupPrefix, group, output)
-
 }
 
 func (c *CacheMonitorImpl) HasGroupKeyBeenUpdated(ctx context.Context, group string) bool {
@@ -132,7 +125,6 @@ func (c *CacheMonitorImpl) DeleteCache(ctx context.Context, group string) error 
 		for key := range keys {
 			err = DeleteKey(ctx, key)
 			if err != nil {
-				ctxLogger.Info(ctx, "failed getting deleting key", zap.String("group", group), zap.String("key", key))
 				continue
 			}
 		}

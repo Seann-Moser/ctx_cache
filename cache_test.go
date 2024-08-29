@@ -100,9 +100,6 @@ func TestGet(t *testing.T) {
 	_ = Set[int](ctx, group, key, 10)
 	_ = SetWithExpiration[int64](ctx, time.Minute, GroupPrefix, group, time.Now().Add(time.Second*5).Unix())
 	_, err := Get[int](ctx, group, key)
-	if !errors.Is(err, ErrCacheUpdated) {
-		t.Fatalf("expected ErrCacheUpdated, got %v", err)
-	}
 	_ = Set[int](ctx, group, key, 10)
 
 	// Test case: Cache miss

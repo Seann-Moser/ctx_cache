@@ -35,7 +35,7 @@ type groupStruct struct {
 func MonitorV3Flags(prefix string) *pflag.FlagSet {
 	fs := pflag.NewFlagSet("monitor", pflag.ExitOnError)
 	fs.Int("monitor-workers", 100, "")
-	fs.Int("monitor-queue-size", 1000, "")
+	fs.Int("monitor-queue-size", 10000, "")
 	fs.Duration("monitor-cache-duration", 10*time.Minute, "")
 	return fs
 }
@@ -48,6 +48,7 @@ func NewMonitorWithFlags() CacheMonitor {
 		deleteGroupQueue: make(chan string, viper.GetInt("monitor-queue-size")),
 		addGroupQueue:    make(chan map[string]string, viper.GetInt("monitor-queue-size")),
 		started:          atomic.Bool{},
+		localCache:       cache.New(viper.GetDuration("monitor-cache-duration"), time.Minute),
 	}
 }
 func NewMonitor(duration time.Duration) CacheMonitor {

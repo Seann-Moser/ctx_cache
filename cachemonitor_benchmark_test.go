@@ -14,12 +14,12 @@ var ctx = context.Background()
 
 func benchmarkCacheMonitor_AddGroupKeys(b *testing.B, monitor CacheMonitor) {
 	for i := 0; i < b.N; i++ {
-		monitor.AddGroupKeys(ctx, "group1", "key1", "key2", "key3")
+		_ = monitor.AddGroupKeys(ctx, "group1", "key1", "key2", "key3")
 	}
 }
 
 func benchmarkCacheMonitor_HasGroupKeyBeenUpdated(b *testing.B, monitor CacheMonitor) {
-	monitor.AddGroupKeys(ctx, "group1", "key1", "key2", "key3")
+	_ = monitor.AddGroupKeys(ctx, "group1", "key1", "key2", "key3")
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
 		monitor.HasGroupKeyBeenUpdated(ctx, "group1")
@@ -27,15 +27,15 @@ func benchmarkCacheMonitor_HasGroupKeyBeenUpdated(b *testing.B, monitor CacheMon
 }
 
 func benchmarkCacheMonitor_GetGroupKeys(b *testing.B, monitor CacheMonitor) {
-	monitor.AddGroupKeys(ctx, "group1", "key1", "key2", "key3")
+	_ = monitor.AddGroupKeys(ctx, "group1", "key1", "key2", "key3")
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		monitor.GetGroupKeys(ctx, "group1")
+		_, _ = monitor.GetGroupKeys(ctx, "group1")
 	}
 }
 
 func benchmarkCacheMonitor_DeleteCache(b *testing.B, monitor CacheMonitor) {
-	monitor.AddGroupKeys(ctx, "group1", "key1", "key2", "key3")
+	_ = monitor.AddGroupKeys(ctx, "group1", "key1", "key2", "key3")
 	errCount := atomic.Int64{}
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
@@ -50,7 +50,7 @@ func benchmarkCacheMonitor_DeleteCache(b *testing.B, monitor CacheMonitor) {
 }
 
 func benchmarkCacheMonitor_UpdateCache(b *testing.B, monitor CacheMonitor) {
-	monitor.AddGroupKeys(ctx, "group1", "key1", "key2", "key3")
+	_ = monitor.AddGroupKeys(ctx, "group1", "key1", "key2", "key3")
 	errCount := atomic.Int64{}
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
@@ -86,7 +86,7 @@ func benchmarkCacheMonitor_UpdateCache(b *testing.B, monitor CacheMonitor) {
 
 func BenchmarkNewMonitorV2Monitor(b *testing.B) {
 	ctx = ContextWithCache(ctx, NewGoCache(cache.New(5*time.Minute, time.Minute), time.Minute, ""))
-	monitor := NewMonitor(5 * time.Minute)
+	monitor := NewMonitor(time.Minute, false)
 	go monitor.Start(ctx)
 	b.Run("AddGroupKeys", func(b *testing.B) {
 		benchmarkCacheMonitor_AddGroupKeys(b, monitor)
@@ -219,19 +219,19 @@ func benchmarkGet(b *testing.B, group string, key string, cacheSize int) {
 }
 
 func BenchmarkGet_SmallCacheV2(b *testing.B) {
-	GlobalCacheMonitor = NewMonitor(time.Minute)
+	GlobalCacheMonitor = NewMonitor(time.Minute, false)
 	go GlobalCacheMonitor.Start(context.Background())
 	benchmarkGet(b, "test_group", "test_key", 100)
 }
 
 func BenchmarkGet_MediumCacheV2(b *testing.B) {
-	GlobalCacheMonitor = NewMonitor(time.Minute)
+	GlobalCacheMonitor = NewMonitor(time.Minute, false)
 	go GlobalCacheMonitor.Start(context.Background())
 	benchmarkGet(b, "test_group", "test_key", 1000)
 }
 
 func BenchmarkGet_LargeCacheV2(b *testing.B) {
-	GlobalCacheMonitor = NewMonitor(time.Minute)
+	GlobalCacheMonitor = NewMonitor(time.Minute, false)
 	go GlobalCacheMonitor.Start(context.Background())
 	benchmarkGet(b, "test_group", "test_key", 10000)
 }

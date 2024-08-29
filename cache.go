@@ -60,15 +60,15 @@ func GetKey[T any](key1, key2 string) string {
 }
 
 func Set[T any](ctx context.Context, group, key string, data T) error {
-	key = GetKey[T](group, key)
-	err := GetCacheFromContext(ctx).SetCache(ctx, group, key, Wrapper[T]{Data: data}.Get())
+	k := GetKey[T](group, key)
+	err := GetCacheFromContext(ctx).SetCache(ctx, group, k, Wrapper[T]{Data: data}.Get())
 	if err != nil {
 		return err
 	}
-	if strings.EqualFold(group, GroupPrefix) || group == "" {
+	if strings.EqualFold(group, GroupPrefix) || group == "" || group == key {
 		return nil
 	}
-	return GlobalCacheMonitor.UpdateCache(ctx, group, key)
+	return GlobalCacheMonitor.UpdateCache(ctx, group, k)
 }
 
 func Delete[T any](ctx context.Context, group, key string) error {
@@ -88,7 +88,7 @@ func SetWithExpiration[T any](ctx context.Context, cacheTimeout time.Duration, g
 	if err != nil {
 		return err
 	}
-	if strings.EqualFold(group, GroupPrefix) || group == "" {
+	if strings.EqualFold(group, GroupPrefix) || group == "" || group == key {
 		return nil
 	}
 	return GlobalCacheMonitor.UpdateCache(ctx, group, k)

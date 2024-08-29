@@ -3,7 +3,7 @@ package ctx_cache
 import (
 	"context"
 	"errors"
-	redis "github.com/Seann-Moser/ociredis"
+	redis "github.com/go-redis/redis/v8"
 	"strings"
 	"testing"
 	"time"
@@ -54,7 +54,7 @@ func TestCacheDragonFly(t *testing.T) {
 	r := redis.NewClient(&redis.Options{
 		Addr: "127.0.0.1:6379",
 	})
-	if nil != r.Ping() {
+	if nil != r.Ping(ctx) {
 		return
 	}
 	cache := NewRedisCache(r, time.Second*10, "test", true)

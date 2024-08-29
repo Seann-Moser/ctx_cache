@@ -3,11 +3,12 @@ package ctx_cache
 import (
 	"context"
 	"encoding/json"
-	"errors"
 	"fmt"
+	"github.com/Seann-Moser/go-serve/pkg/ctxLogger"
+	"go.uber.org/zap"
 	"time"
 
-	redis "github.com/Seann-Moser/ociredis"
+	"github.com/go-redis/redis/v8"
 	"github.com/spf13/pflag"
 	"github.com/spf13/viper"
 )
@@ -39,7 +40,6 @@ func NewRedisCacheFromFlags(ctx context.Context, prefix string) *RedisCache {
 	rdb := redis.NewClient(&redis.Options{
 		Addr:     viper.GetString(prefix + "redis-addr"),
 		Password: viper.GetString(prefix + "redis-pass"),
-		Context:  ctx,
 	})
 
 	return NewRedisCache(rdb, viper.GetDuration(prefix+"redis-cleanup-duration"), viper.GetString(prefix+"redis-instance"), viper.GetBool(prefix+"redis-enabled"))
@@ -61,31 +61,39 @@ func (c *RedisCache) GetName() string {
 	return fmt.Sprintf("REDISCACHE_%s", c.cacheTags.instance)
 }
 func (c *RedisCache) DeleteKey(ctx context.Context, key string) error {
-	return c.cacher.Del(key).Err()
+	stat, err := c.cacher.Del(ctx, key).Result()
+	// If an error occurs, wrap it with context
+	if err != nil {
+		ctxLogger.Warn(ctx, "failed deleting redis cache key")
+		return fmt.Errorf("failed to delete key %s: %w", key, err)
+	}
+	ctxLogger.Debug(ctx, "deleted redis cache key", zap.Int64("val", stat))
+	return nil
 }
+
 func (c *RedisCache) SetCacheWithExpiration(ctx context.Context, cacheTimeout time.Duration, group, key string, item interface{}) error {
-	var cacheErr error
-	s := c.cacheTags.record(ctx, CacheCmdSET, func(err error) CacheStatus {
-		if errors.Is(err, ErrCacheMiss) {
-			return CacheStatusMISSING
-		}
-		if err != nil {
-			return CacheStatusERR
-		}
-		return CacheStatusOK
-	})
-	defer func() {
-		s(cacheErr)
-	}()
+	//var cacheErr error
+	//s := c.cacheTags.record(ctx, CacheCmdSET, func(err error) CacheStatus {
+	//	if errors.Is(err, ErrCacheMiss) {
+	//		return CacheStatusMISSING
+	//	}
+	//	if err != nil {
+	//		return CacheStatusERR
+	//	}
+	//	return CacheStatusOK
+	//})
+	//defer func() {
+	//	s(cacheErr)
+	//}()
 
 	data, err := json.Marshal(item)
 	if err != nil {
-		cacheErr = ErrCacheMiss
+		//cacheErr = ErrCacheMiss
 		return err
 	}
 	localClient := c.cacher.WithContext(ctx)
-	stats := localClient.Set(key, data, cacheTimeout)
-	cacheErr = stats.Err()
+	stats := localClient.Set(ctx, key, data, cacheTimeout)
+	//cacheErr = stats.Err()
 	return stats.Err()
 }
 
@@ -94,28 +102,28 @@ func (c *RedisCache) SetCache(ctx context.Context, group, key string, item inter
 }
 
 func (c *RedisCache) GetCache(ctx context.Context, group, key string) ([]byte, error) {
-	var cacheErr error
-	s := c.cacheTags.record(ctx, CacheCmdGET, func(err error) CacheStatus {
-		if errors.Is(err, ErrCacheMiss) {
-			return CacheStatusMISSING
-		}
-		if err != nil {
-			return CacheStatusERR
-		}
-		return CacheStatusFOUND
-	})
-	defer func() {
-		s(cacheErr)
-	}()
+	//var cacheErr error
+	//s := c.cacheTags.record(ctx, CacheCmdGET, func(err error) CacheStatus {
+	//	if errors.Is(err, ErrCacheMiss) {
+	//		return CacheStatusMISSING
+	//	}
+	//	if err != nil {
+	//		return CacheStatusERR
+	//	}
+	//	return CacheStatusFOUND
+	//})
+	//defer func() {
+	//	s(cacheErr)
+	//}()
 
 	localClient := c.cacher.WithContext(ctx)
-	data, err := localClient.Get(key).Bytes()
+	data, err := localClient.Get(ctx, key).Bytes()
 	if err != nil {
-		cacheErr = err
+		//cacheErr = err
 		return nil, err
 	}
 	if len(data) == 0 {
-		cacheErr = ErrCacheMiss
+		//cacheErr = ErrCacheMiss
 		return nil, ErrCacheMiss
 	}
 	return data, nil
@@ -123,5 +131,5 @@ func (c *RedisCache) GetCache(ctx context.Context, group, key string) ([]byte, e
 
 func (c *RedisCache) Ping(ctx context.Context) error {
 	localClient := c.cacher.WithContext(ctx)
-	return localClient.Ping().Err()
+	return localClient.Ping(ctx).Err()
 }

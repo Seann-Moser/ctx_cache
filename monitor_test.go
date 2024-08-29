@@ -55,7 +55,7 @@ func TestMonitor(t *testing.T) {
 		go func() {
 			defer wg.Done()
 			for _, cacheFunction := range cacheFunctions {
-				e, err := GetSet[string](ctx, 1*time.Minute, cacheFunction.Group, cacheFunction.Key, false, NewD(cacheFunction))
+				e, err := GetSet[string](ctx, 1*time.Minute, cacheFunction.Group, cacheFunction.Key, true, NewD(cacheFunction))
 				if err != nil {
 					t.Errorf("failed getting cache %s %s Expected:%s", cacheFunction.Group, cacheFunction.Key, cacheFunction.Expected)
 				}

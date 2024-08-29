@@ -60,7 +60,8 @@ func GetKey[T any](key1, key2 string) string {
 }
 
 func Set[T any](ctx context.Context, group, key string, data T) error {
-	err := GetCacheFromContext(ctx).SetCache(ctx, group, GetKey[T](group, key), Wrapper[T]{Data: data}.Get())
+	key = GetKey[T](group, key)
+	err := GetCacheFromContext(ctx).SetCache(ctx, group, key, Wrapper[T]{Data: data}.Get())
 	if err != nil {
 		return err
 	}
@@ -90,7 +91,7 @@ func SetWithExpiration[T any](ctx context.Context, cacheTimeout time.Duration, g
 	if strings.EqualFold(group, GroupPrefix) || group == "" {
 		return nil
 	}
-	return GlobalCacheMonitor.UpdateCache(ctx, group, key)
+	return GlobalCacheMonitor.UpdateCache(ctx, group, k)
 }
 
 func SetFromCache[T any](ctx context.Context, cache Cache, group, key string, data T) error {

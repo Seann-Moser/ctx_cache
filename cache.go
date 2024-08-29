@@ -198,6 +198,53 @@ func GetSetP[T any](ctx context.Context, cacheTimeout time.Duration, group, key 
 	}
 }
 
+func GetSetCheck[T any](ctx context.Context, cacheTimeout time.Duration, group, key string, refresh bool, isValid func(ctx context.Context, data *T) bool, gtr func(ctx context.Context) (T, error)) (T, error) {
+	if refresh {
+		nv, err := gtr(ctx)
+		if err != nil {
+			var tmp T
+			return tmp, err
+		}
+		return nv, SetWithExpiration[T](ctx, cacheTimeout, group, key, nv)
+	}
+	if v, err := Get[T](ctx, group, key); errors.Is(err, ErrCacheMiss) || errors.Is(err, ErrCacheUpdated) || v == nil || !isValid(ctx, v) {
+		nv, err := gtr(ctx)
+		if err != nil {
+			var tmp T
+			return tmp, err
+		}
+		return nv, SetWithExpiration[T](ctx, cacheTimeout, group, key, nv)
+	} else {
+		return *v, nil
+	}
+}
+
+func GetSetCheckP[T any](ctx context.Context, cacheTimeout time.Duration, group, key string, refresh bool, isValid func(ctx context.Context, data *T) bool, gtr func(ctx context.Context) (*T, error)) (*T, error) {
+	if refresh {
+		nv, err := gtr(ctx)
+		if err != nil {
+			return nil, fmt.Errorf("failed getting cache value(group:%s, key:%s): %w", group, key, err)
+		}
+		if nv == nil {
+			return nil, ErrCacheGet
+		}
+		return nv, SetWithExpiration[T](ctx, cacheTimeout, group, key, *nv)
+	}
+	v, err := Get[T](ctx, group, key)
+	if errors.Is(err, ErrCacheMiss) || errors.Is(err, ErrCacheUpdated) || v == nil || !isValid(ctx, v) {
+		nv, err := gtr(ctx)
+		if err != nil {
+			return nil, fmt.Errorf("failed getting cache value(group:%s, key:%s): %w", group, key, err)
+		}
+		if nv == nil {
+			return nil, ErrCacheGet
+		}
+		return nv, SetWithExpiration[T](ctx, cacheTimeout, group, key, *nv)
+	} else {
+		return v, nil
+	}
+}
+
 func GetFromCache[T any](ctx context.Context, cache Cache, group, key string) (*T, error) {
 	if GlobalCacheMonitor.HasGroupKeyBeenUpdated(ctx, group) {
 		return nil, ErrCacheUpdated

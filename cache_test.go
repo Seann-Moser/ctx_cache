@@ -188,7 +188,7 @@ func FuzzGetSet(f *testing.F) {
 	// Seed corpus
 	f.Add("test_group", "test_key")
 	GlobalCacheMonitor = NewMonitor(time.Minute)
-	GlobalCacheMonitor.Start(context.Background())
+	go GlobalCacheMonitor.Start(context.Background())
 	c := NewGoCache(cache.New(5*time.Minute, time.Minute), time.Minute, "test")
 	ctx := ContextWithCache(ctx, c)
 	f.Fuzz(func(t *testing.T, group, key string) {

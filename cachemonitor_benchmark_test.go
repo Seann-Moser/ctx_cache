@@ -5,6 +5,7 @@ import (
 	"errors"
 	"github.com/patrickmn/go-cache"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 )
@@ -35,17 +36,31 @@ func benchmarkCacheMonitor_GetGroupKeys(b *testing.B, monitor CacheMonitor) {
 
 func benchmarkCacheMonitor_DeleteCache(b *testing.B, monitor CacheMonitor) {
 	monitor.AddGroupKeys(ctx, "group1", "key1", "key2", "key3")
+	errCount := atomic.Int64{}
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		monitor.DeleteCache(ctx, "group1")
+		err := monitor.DeleteCache(ctx, "group1")
+		if err != nil {
+			errCount.Add(1)
+		}
+	}
+	if errCount.Load() > 0 {
+		b.Errorf("failed :%d\n", errCount.Load())
 	}
 }
 
 func benchmarkCacheMonitor_UpdateCache(b *testing.B, monitor CacheMonitor) {
 	monitor.AddGroupKeys(ctx, "group1", "key1", "key2", "key3")
+	errCount := atomic.Int64{}
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		monitor.UpdateCache(ctx, "group1", "key4")
+		err := monitor.UpdateCache(ctx, "group1", "key4")
+		if err != nil {
+			errCount.Add(1)
+		}
+	}
+	if errCount.Load() > 0 {
+		b.Errorf("failed :%d\n", errCount.Load())
 	}
 }
 
@@ -72,6 +87,7 @@ func benchmarkCacheMonitor_UpdateCache(b *testing.B, monitor CacheMonitor) {
 func BenchmarkNewMonitorV2Monitor(b *testing.B) {
 	ctx = ContextWithCache(ctx, NewGoCache(cache.New(5*time.Minute, time.Minute), time.Minute, ""))
 	monitor := NewMonitor(5 * time.Minute)
+	go monitor.Start(ctx)
 	b.Run("AddGroupKeys", func(b *testing.B) {
 		benchmarkCacheMonitor_AddGroupKeys(b, monitor)
 	})

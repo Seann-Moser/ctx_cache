@@ -99,11 +99,11 @@ func TestGet(t *testing.T) {
 	//
 	_ = Set[int](ctx, group, key, 10)
 	_ = SetWithExpiration[int64](ctx, time.Minute, GroupPrefix, group, time.Now().Add(time.Second*5).Unix())
-	_, err := Get[int](ctx, group, key)
+	_, _ = Get[int](ctx, group, key)
 	_ = Set[int](ctx, group, key, 10)
 
 	// Test case: Cache miss
-	_, err = Get[int](ctx, group, key+"2")
+	_, err := Get[int](ctx, group, key+"2")
 	if err == nil || err.Error() != "cache missed" {
 		t.Fatalf("expected cache miss, got %v", err)
 	}

@@ -27,11 +27,6 @@ type CacheMonitorImpl struct {
 	started          atomic.Bool
 	useChans         bool
 }
-type groupStruct struct {
-	Group   string
-	Key     string
-	expires time.Time
-}
 
 func MonitorV3Flags(prefix string) *pflag.FlagSet {
 	fs := pflag.NewFlagSet("monitor", pflag.ExitOnError)

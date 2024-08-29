@@ -74,7 +74,7 @@ type CacheKeyWatcher struct {
 
 func (c *CacheKeyWatcher) Updated(ctx context.Context) bool {
 	_, err := ctx_cache.Get[string](ctx, c.Group, c.Key)
-	if errors.Is(ctx_cache.ErrCacheUpdated, err) {
+	if errors.Is(err, ctx_cache.ErrCacheUpdated) {
 		if ctx_cache.GlobalCacheMonitor.HasGroupKeyBeenUpdated(ctx, c.Group) {
 			ctxLogger.Info(ctx, "Updating Group Key")
 		}

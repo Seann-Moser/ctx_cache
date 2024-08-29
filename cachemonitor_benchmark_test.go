@@ -14,12 +14,12 @@ var ctx = context.Background()
 
 func benchmarkCacheMonitor_AddGroupKeys(b *testing.B, monitor CacheMonitor) {
 	for i := 0; i < b.N; i++ {
-		monitor.AddGroupKeys(ctx, "group1", "key1", "key2", "key3")
+		_ = monitor.AddGroupKeys(ctx, "group1", "key1", "key2", "key3")
 	}
 }
 
 func benchmarkCacheMonitor_HasGroupKeyBeenUpdated(b *testing.B, monitor CacheMonitor) {
-	monitor.AddGroupKeys(ctx, "group1", "key1", "key2", "key3")
+	_ = monitor.AddGroupKeys(ctx, "group1", "key1", "key2", "key3")
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
 		monitor.HasGroupKeyBeenUpdated(ctx, "group1")
@@ -27,15 +27,15 @@ func benchmarkCacheMonitor_HasGroupKeyBeenUpdated(b *testing.B, monitor CacheMon
 }
 
 func benchmarkCacheMonitor_GetGroupKeys(b *testing.B, monitor CacheMonitor) {
-	monitor.AddGroupKeys(ctx, "group1", "key1", "key2", "key3")
+	_ = monitor.AddGroupKeys(ctx, "group1", "key1", "key2", "key3")
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		monitor.GetGroupKeys(ctx, "group1")
+		_, _ = monitor.GetGroupKeys(ctx, "group1")
 	}
 }
 
 func benchmarkCacheMonitor_DeleteCache(b *testing.B, monitor CacheMonitor) {
-	monitor.AddGroupKeys(ctx, "group1", "key1", "key2", "key3")
+	_ = monitor.AddGroupKeys(ctx, "group1", "key1", "key2", "key3")
 	errCount := atomic.Int64{}
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
@@ -50,7 +50,7 @@ func benchmarkCacheMonitor_DeleteCache(b *testing.B, monitor CacheMonitor) {
 }
 
 func benchmarkCacheMonitor_UpdateCache(b *testing.B, monitor CacheMonitor) {
-	monitor.AddGroupKeys(ctx, "group1", "key1", "key2", "key3")
+	_ = monitor.AddGroupKeys(ctx, "group1", "key1", "key2", "key3")
 	errCount := atomic.Int64{}
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {

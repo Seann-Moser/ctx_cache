@@ -72,11 +72,11 @@ func (c *CacheMonitorImpl) AddGroupKeys(ctx context.Context, group string, newKe
 
 	if !found {
 		v := make(map[string]struct{}, len(newKeys))
-		c.groupMutex.RLock()
+		c.groupMutex.Lock()
 		for _, newKey := range newKeys {
 			v[newKey] = struct{}{}
 		}
-		c.groupMutex.RUnlock()
+		c.groupMutex.Unlock()
 		c.localCache.Set(group, v, cache.DefaultExpiration)
 
 		return nil
@@ -152,7 +152,7 @@ func (c *CacheMonitorImpl) DeleteCache(ctx context.Context, group string) error 
 }
 
 func (c *CacheMonitorImpl) UpdateCache(ctx context.Context, group string, key string) error {
-	if strings.EqualFold(group, GroupPrefix) || group == "" || !c.started.Load() {
+	if strings.EqualFold(group, GroupPrefix) || group == "" {
 		return nil
 	}
 	if !c.useChans {
@@ -161,6 +161,9 @@ func (c *CacheMonitorImpl) UpdateCache(ctx context.Context, group string, key st
 		} else {
 			return nil
 		}
+	}
+	if !c.started.Load() {
+		return nil
 	}
 	select {
 	case c.addGroupQueue <- map[string]string{group: key}:

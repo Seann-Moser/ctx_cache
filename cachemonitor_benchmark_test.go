@@ -86,7 +86,7 @@ func benchmarkCacheMonitor_UpdateCache(b *testing.B, monitor CacheMonitor) {
 
 func BenchmarkNewMonitorV2Monitor(b *testing.B) {
 	ctx = ContextWithCache(ctx, NewGoCache(cache.New(5*time.Minute, time.Minute), time.Minute, ""))
-	monitor := NewMonitor(5 * time.Minute)
+	monitor := NewMonitor(time.Minute, false)
 	go monitor.Start(ctx)
 	b.Run("AddGroupKeys", func(b *testing.B) {
 		benchmarkCacheMonitor_AddGroupKeys(b, monitor)
@@ -219,19 +219,19 @@ func benchmarkGet(b *testing.B, group string, key string, cacheSize int) {
 }
 
 func BenchmarkGet_SmallCacheV2(b *testing.B) {
-	GlobalCacheMonitor = NewMonitor(time.Minute)
+	GlobalCacheMonitor = NewMonitor(time.Minute, false)
 	go GlobalCacheMonitor.Start(context.Background())
 	benchmarkGet(b, "test_group", "test_key", 100)
 }
 
 func BenchmarkGet_MediumCacheV2(b *testing.B) {
-	GlobalCacheMonitor = NewMonitor(time.Minute)
+	GlobalCacheMonitor = NewMonitor(time.Minute, false)
 	go GlobalCacheMonitor.Start(context.Background())
 	benchmarkGet(b, "test_group", "test_key", 1000)
 }
 
 func BenchmarkGet_LargeCacheV2(b *testing.B) {
-	GlobalCacheMonitor = NewMonitor(time.Minute)
+	GlobalCacheMonitor = NewMonitor(time.Minute, false)
 	go GlobalCacheMonitor.Start(context.Background())
 	benchmarkGet(b, "test_group", "test_key", 10000)
 }

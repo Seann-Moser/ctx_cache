@@ -25,6 +25,7 @@ type CacheMonitorImpl struct {
 	deleteGroupQueue chan string
 	addGroupQueue    chan map[string]string
 	started          atomic.Bool
+	useChans         bool
 }
 type groupStruct struct {
 	Group   string
@@ -37,6 +38,7 @@ func MonitorV3Flags(prefix string) *pflag.FlagSet {
 	fs.Int("monitor-workers", 100, "")
 	fs.Int("monitor-queue-size", 10000, "")
 	fs.Duration("monitor-cache-duration", 10*time.Minute, "")
+	fs.Bool("monitor-use-chan", false, "")
 	return fs
 }
 
@@ -49,9 +51,10 @@ func NewMonitorWithFlags() CacheMonitor {
 		addGroupQueue:    make(chan map[string]string, viper.GetInt("monitor-queue-size")),
 		started:          atomic.Bool{},
 		localCache:       cache.New(viper.GetDuration("monitor-cache-duration"), time.Minute),
+		useChans:         viper.GetBool("monitor-use-chan"),
 	}
 }
-func NewMonitor(duration time.Duration) CacheMonitor {
+func NewMonitor(duration time.Duration, useChans bool) CacheMonitor {
 	return &CacheMonitorImpl{
 		groupMutex:       &sync.RWMutex{},
 		workers:          100,
@@ -60,6 +63,7 @@ func NewMonitor(duration time.Duration) CacheMonitor {
 		deleteGroupQueue: make(chan string, 100000),
 		addGroupQueue:    make(chan map[string]string, 100000),
 		started:          atomic.Bool{},
+		useChans:         useChans,
 	}
 }
 
@@ -113,6 +117,23 @@ func (c *CacheMonitorImpl) DeleteCache(ctx context.Context, group string) error 
 	if !c.started.Load() {
 		return nil
 	}
+	if !c.useChans {
+		keys, err := c.GetGroupKeys(ctx, group)
+		if err != nil {
+			return err
+		}
+		c.groupMutex.Lock()
+		for key := range keys {
+			err = DeleteKey(ctx, key)
+			if err != nil {
+				continue
+			}
+		}
+		c.localCache.Set(group, map[string]struct{}{}, cache.DefaultExpiration)
+		c.groupMutex.Unlock()
+		return nil
+	}
+
 	select {
 	case c.deleteGroupQueue <- group:
 		// Successfully added to the channel
@@ -138,6 +159,13 @@ func (c *CacheMonitorImpl) DeleteCache(ctx context.Context, group string) error 
 func (c *CacheMonitorImpl) UpdateCache(ctx context.Context, group string, key string) error {
 	if strings.EqualFold(group, GroupPrefix) || group == "" || !c.started.Load() {
 		return nil
+	}
+	if !c.useChans {
+		if err := c.AddGroupKeys(ctx, group, key); err != nil {
+			return fmt.Errorf("failed adding to cache: %w", err)
+		} else {
+			return nil
+		}
 	}
 	select {
 	case c.addGroupQueue <- map[string]string{group: key}:

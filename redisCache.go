@@ -92,7 +92,7 @@ func (c *RedisCache) SetCacheWithExpiration(ctx context.Context, cacheTimeout ti
 		return err
 	}
 	localClient := c.cacher.WithContext(ctx)
-	stats := localClient.Set(key, data, cacheTimeout)
+	stats := localClient.Set(ctx, key, data, cacheTimeout)
 	//cacheErr = stats.Err()
 	return stats.Err()
 }
@@ -117,7 +117,7 @@ func (c *RedisCache) GetCache(ctx context.Context, group, key string) ([]byte, e
 	//}()
 
 	localClient := c.cacher.WithContext(ctx)
-	data, err := localClient.Get(key).Bytes()
+	data, err := localClient.Get(ctx, key).Bytes()
 	if err != nil {
 		//cacheErr = err
 		return nil, err
@@ -131,5 +131,5 @@ func (c *RedisCache) GetCache(ctx context.Context, group, key string) ([]byte, e
 
 func (c *RedisCache) Ping(ctx context.Context) error {
 	localClient := c.cacher.WithContext(ctx)
-	return localClient.Ping().Err()
+	return localClient.Ping(ctx).Err()
 }

@@ -83,7 +83,9 @@ func SetWithExpiration[T any](ctx context.Context, cacheTimeout time.Duration, g
 	c := GetCacheFromContext(ctx)
 	k := GetKey[T](group, key)
 	w := Wrapper[T]{Data: data}.Get()
-
+	if data == nil {
+		return nil
+	}
 	err := c.SetCacheWithExpiration(ctx, cacheTimeout, group, k, w)
 	if err != nil {
 		return err

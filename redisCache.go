@@ -85,7 +85,9 @@ func (c *RedisCache) SetCacheWithExpiration(ctx context.Context, cacheTimeout ti
 	//defer func() {
 	//	s(cacheErr)
 	//}()
-
+	if item == nil {
+		return nil
+	}
 	data, err := json.Marshal(item)
 	if err != nil {
 		//cacheErr = ErrCacheMiss

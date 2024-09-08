@@ -126,7 +126,7 @@ func (c *CacheMonitorImpl) DeleteCache(ctx context.Context, group string) error 
 		c.localCache.Set(group, map[string]struct{}{}, cache.DefaultExpiration)
 
 		c.groupMutex.Unlock()
-		data, err := Get[map[string]struct{}](ctx, group, group)
+		data, _ := Get[map[string]struct{}](ctx, group, group)
 		if data != nil {
 			for key := range *data {
 				err = DeleteKey(ctx, key)
@@ -156,7 +156,7 @@ func (c *CacheMonitorImpl) DeleteCache(ctx context.Context, group string) error 
 		}
 		c.localCache.Set(group, map[string]struct{}{}, cache.DefaultExpiration)
 		c.groupMutex.Unlock()
-		data, err := Get[map[string]struct{}](ctx, group, group)
+		data, _ := Get[map[string]struct{}](ctx, group, group)
 		if data != nil {
 			for key := range *data {
 				err = DeleteKey(ctx, key)
@@ -231,7 +231,7 @@ func (c *CacheMonitorImpl) Start(ctx context.Context) {
 					}
 					c.localCache.Set(group, map[string]struct{}{}, cache.DefaultExpiration)
 					c.groupMutex.Unlock()
-					data, err := Get[map[string]struct{}](ctx, group, group)
+					data, _ := Get[map[string]struct{}](ctx, group, group)
 					if data != nil {
 						for key := range keys {
 							err = DeleteKey(ctx, key)

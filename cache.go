@@ -81,16 +81,25 @@ func DeleteKey(ctx context.Context, key string) error {
 }
 
 func SetWithExpiration[T any](ctx context.Context, cacheTimeout time.Duration, group, key string, data T) error {
+	getSetKey := trace.StartRegion(ctx, "get_set_key")
 	c := GetCacheFromContext(ctx)
 	k := GetKey[T](group, key)
+	getSetKey.End()
+	encodedData := trace.StartRegion(ctx, "encodeData")
+
 	w := Wrapper[T]{Data: data}.Get()
+	encodedData.End()
+	setCache := trace.StartRegion(ctx, "setCache")
 	err := c.SetCacheWithExpiration(ctx, cacheTimeout, group, k, w)
+	setCache.End()
 	if err != nil {
 		return err
 	}
 	if strings.EqualFold(group, GroupPrefix) || group == "" || group == key {
 		return nil
 	}
+	updateGlobal := trace.StartRegion(ctx, "update_global")
+	defer updateGlobal.End()
 	return GlobalCacheMonitor.UpdateCache(ctx, group, k)
 }
 

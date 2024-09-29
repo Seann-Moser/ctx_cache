@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"runtime/trace"
 	"strings"
 	"time"
 
@@ -80,16 +81,25 @@ func DeleteKey(ctx context.Context, key string) error {
 }
 
 func SetWithExpiration[T any](ctx context.Context, cacheTimeout time.Duration, group, key string, data T) error {
+	getSetKey := trace.StartRegion(ctx, "get_set_key")
 	c := GetCacheFromContext(ctx)
 	k := GetKey[T](group, key)
+	getSetKey.End()
+	encodedData := trace.StartRegion(ctx, "encodeData")
+
 	w := Wrapper[T]{Data: data}.Get()
+	encodedData.End()
+	setCache := trace.StartRegion(ctx, "setCache")
 	err := c.SetCacheWithExpiration(ctx, cacheTimeout, group, k, w)
+	setCache.End()
 	if err != nil {
 		return err
 	}
 	if strings.EqualFold(group, GroupPrefix) || group == "" || group == key {
 		return nil
 	}
+	updateGlobal := trace.StartRegion(ctx, "update_global")
+	defer updateGlobal.End()
 	return GlobalCacheMonitor.UpdateCache(ctx, group, k)
 }
 
@@ -130,13 +140,19 @@ func Get[T any](ctx context.Context, group, key string) (*T, error) {
 	//		return nil, ErrCacheUpdated
 	//	}
 	//}
+	getKey := trace.StartRegion(ctx, "get_key")
 	key = GetKey[T](group, key)
 	c := GetCacheFromContext(ctx)
+	getKey.End()
+	getCache := trace.StartRegion(ctx, "get_cache")
 	data, err := c.GetCache(ctx, group, key)
+	getCache.End()
 	if err != nil {
 		return nil, err
 	}
 
+	convert := trace.StartRegion(ctx, "convert")
+	defer convert.End()
 	if CheckPrimaryType[T](*new(T)) {
 		t, err := ConvertBytesToType[T](data)
 		if err != nil {
@@ -144,6 +160,7 @@ func Get[T any](ctx context.Context, group, key string) (*T, error) {
 		}
 		return &t, nil
 	}
+
 	return UnmarshalWrappert[T](data)
 	//var output Wrapper[T]
 	//err = json.Unmarshal(data, &output)
@@ -173,6 +190,7 @@ func GetSet[T any](ctx context.Context, cacheTimeout time.Duration, group, key s
 		return *v, nil
 	}
 }
+
 func GetSetP[T any](ctx context.Context, cacheTimeout time.Duration, group, key string, refresh bool, gtr func(ctx context.Context) (*T, error)) (*T, error) {
 	if refresh {
 		nv, err := gtr(ctx)
@@ -221,24 +239,34 @@ func GetSetCheck[T any](ctx context.Context, cacheTimeout time.Duration, group, 
 
 func GetSetCheckP[T any](ctx context.Context, cacheTimeout time.Duration, group, key string, refresh bool, isValid func(ctx context.Context, data *T) bool, gtr func(ctx context.Context) (*T, error)) (*T, error) {
 	if refresh {
+		refresh := trace.StartRegion(ctx, "refresh_function")
 		nv, err := gtr(ctx)
+		refresh.End()
 		if err != nil {
 			return nil, fmt.Errorf("failed getting cache value(group:%s, key:%s): %w", group, key, err)
 		}
 		if nv == nil {
 			return nil, ErrCacheGet
 		}
+		setWithExpiration := trace.StartRegion(ctx, "set_with_expiration")
+		defer setWithExpiration.End()
 		return nv, SetWithExpiration[T](ctx, cacheTimeout, group, key, *nv)
 	}
+	get := trace.StartRegion(ctx, "get")
 	v, err := Get[T](ctx, group, key)
+	get.End()
 	if errors.Is(err, ErrCacheMiss) || errors.Is(err, ErrCacheUpdated) || v == nil || !isValid(ctx, v) {
+		setFunctionCall := trace.StartRegion(ctx, "set_function_call")
 		nv, err := gtr(ctx)
+		setFunctionCall.End()
 		if err != nil {
 			return nil, fmt.Errorf("failed getting cache value(group:%s, key:%s): %w", group, key, err)
 		}
 		if nv == nil {
 			return nil, ErrCacheGet
 		}
+		setWithExpiration := trace.StartRegion(ctx, "set_with_expiration")
+		defer setWithExpiration.End()
 		return nv, SetWithExpiration[T](ctx, cacheTimeout, group, key, *nv)
 	} else {
 		return v, nil

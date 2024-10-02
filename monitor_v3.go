@@ -15,8 +15,12 @@ import (
 	"time"
 )
 
+type GroupData struct {
+	mu   sync.Mutex `json:"-"`
+	keys map[string]struct{}
+}
+
 type CacheMonitorImpl struct {
-	groupMutex *sync.RWMutex
 	localCache *cache.Cache
 
 	workers       int
@@ -39,7 +43,6 @@ func MonitorV3Flags(prefix string) *pflag.FlagSet {
 
 func NewMonitorWithFlags() CacheMonitor {
 	return &CacheMonitorImpl{
-		groupMutex:       &sync.RWMutex{},
 		workers:          viper.GetInt("monitor-workers"),
 		cacheDuration:    viper.GetDuration("monitor-cache-duration"),
 		deleteGroupQueue: make(chan string, viper.GetInt("monitor-queue-size")),
@@ -49,9 +52,9 @@ func NewMonitorWithFlags() CacheMonitor {
 		useChans:         viper.GetBool("monitor-use-chan"),
 	}
 }
+
 func NewMonitor(duration time.Duration, useChans bool) CacheMonitor {
 	return &CacheMonitorImpl{
-		groupMutex:       &sync.RWMutex{},
 		workers:          100,
 		localCache:       cache.New(duration, time.Minute),
 		cacheDuration:    duration,
@@ -66,29 +69,40 @@ func (c *CacheMonitorImpl) AddGroupKeys(ctx context.Context, group string, newKe
 	if strings.EqualFold(group, GroupPrefix) || group == "" || (len(newKeys) == 1 && newKeys[0] == group) {
 		return nil
 	}
-	//c.groupMutex.RLock()
-	data, found := c.localCache.Get(group)
-	//c.groupMutex.RUnlock()
 
+	dataInterface, found := c.localCache.Get(group)
 	if !found {
-		v := make(map[string]struct{}, len(newKeys))
-		c.groupMutex.Lock()
-		for _, newKey := range newKeys {
-			v[newKey] = struct{}{}
+		data := &GroupData{
+			keys: make(map[string]struct{}, len(newKeys)),
 		}
-		c.groupMutex.Unlock()
-		c.localCache.Set(group, v, cache.DefaultExpiration)
-		_ = Set[map[string]struct{}](ctx, group, group, v)
+		data.mu.Lock()
+		for _, newKey := range newKeys {
+			data.keys[newKey] = struct{}{}
+		}
+		// Create a copy of keys under the lock
+		copyKeys := make(map[string]struct{}, len(data.keys))
+		for k := range data.keys {
+			copyKeys[k] = struct{}{}
+		}
+		data.mu.Unlock()
+
+		c.localCache.Set(group, data, cache.DefaultExpiration)
+		_ = Set[map[string]struct{}](ctx, group, group, copyKeys)
 		return nil
 	}
-	c.groupMutex.Lock()
-	d := data.(map[string]struct{})
+
+	data := dataInterface.(*GroupData)
+	data.mu.Lock()
 	for _, newKey := range newKeys {
-		d[newKey] = struct{}{}
+		data.keys[newKey] = struct{}{}
 	}
-	c.localCache.Set(group, d, cache.DefaultExpiration)
-	_ = Set[map[string]struct{}](ctx, group, group, d)
-	c.groupMutex.Unlock()
+	// Create a copy of keys under the lock
+	copyKeys := make(map[string]struct{}, len(data.keys))
+	for k := range data.keys {
+		copyKeys[k] = struct{}{}
+	}
+	data.mu.Unlock()
+	_ = Set[map[string]struct{}](ctx, group, group, copyKeys)
 	return nil
 }
 
@@ -97,39 +111,51 @@ func (c *CacheMonitorImpl) HasGroupKeyBeenUpdated(ctx context.Context, group str
 }
 
 func (c *CacheMonitorImpl) GetGroupKeys(ctx context.Context, group string) (map[string]struct{}, error) {
-	if data, found := c.localCache.Get(group); found {
-		return data.(map[string]struct{}), nil
+	if dataInterface, found := c.localCache.Get(group); found {
+		data := dataInterface.(*GroupData)
+		data.mu.Lock()
+		defer data.mu.Unlock()
+		keysCopy := make(map[string]struct{}, len(data.keys))
+		for k := range data.keys {
+			keysCopy[k] = struct{}{}
+		}
+		return keysCopy, nil
 	}
 	return map[string]struct{}{}, nil
 }
 
 func (c *CacheMonitorImpl) DeleteCache(ctx context.Context, group string) error {
-	if v, f := c.localCache.Get(group); !f || len(v.(map[string]struct{})) == 0 {
+	dataInterface, found := c.localCache.Get(group)
+	if !found {
 		return nil
 	}
 	if !c.started.Load() {
 		return nil
 	}
+	data := dataInterface.(*GroupData)
 	if !c.useChans {
-
-		keys, err := c.GetGroupKeys(ctx, group)
-		if err != nil {
-			return err
+		data.mu.Lock()
+		// Create a copy of keys under the lock
+		keysCopy := make(map[string]struct{}, len(data.keys))
+		for key := range data.keys {
+			keysCopy[key] = struct{}{}
 		}
-		c.groupMutex.Lock()
-		for key := range keys {
-			err = DeleteKey(ctx, key)
+		// Clear the original keys
+		data.keys = make(map[string]struct{})
+		data.mu.Unlock()
+
+		c.localCache.Set(group, data, cache.DefaultExpiration)
+		for key := range keysCopy {
+			err := DeleteKey(ctx, key)
 			if err != nil {
 				continue
 			}
 		}
-		c.localCache.Set(group, map[string]struct{}{}, cache.DefaultExpiration)
 
-		c.groupMutex.Unlock()
-		data, _ := Get[map[string]struct{}](ctx, group, group)
-		if data != nil {
-			for key := range *data {
-				err = DeleteKey(ctx, key)
+		dataFromGlobalCache, _ := Get[map[string]struct{}](ctx, group, group)
+		if dataFromGlobalCache != nil {
+			for key := range *dataFromGlobalCache {
+				err := DeleteKey(ctx, key)
 				if err != nil {
 					continue
 				}
@@ -140,26 +166,30 @@ func (c *CacheMonitorImpl) DeleteCache(ctx context.Context, group string) error 
 
 	select {
 	case c.deleteGroupQueue <- group:
-		// Successfully added to the channel
 		return nil
 	default:
-		keys, err := c.GetGroupKeys(ctx, group)
-		if err != nil {
-			return err
+		data.mu.Lock()
+		// Create a copy of keys under the lock
+		keysCopy := make(map[string]struct{}, len(data.keys))
+		for key := range data.keys {
+			keysCopy[key] = struct{}{}
 		}
-		c.groupMutex.Lock()
-		for key := range keys {
-			err = DeleteKey(ctx, key)
+		// Clear the original keys
+		data.keys = make(map[string]struct{})
+		data.mu.Unlock()
+
+		c.localCache.Set(group, data, cache.DefaultExpiration)
+		for key := range keysCopy {
+			err := DeleteKey(ctx, key)
 			if err != nil {
 				continue
 			}
 		}
-		c.localCache.Set(group, map[string]struct{}{}, cache.DefaultExpiration)
-		c.groupMutex.Unlock()
-		data, _ := Get[map[string]struct{}](ctx, group, group)
-		if data != nil {
-			for key := range *data {
-				err = DeleteKey(ctx, key)
+
+		dataFromGlobalCache, _ := Get[map[string]struct{}](ctx, group, group)
+		if dataFromGlobalCache != nil {
+			for key := range *dataFromGlobalCache {
+				err := DeleteKey(ctx, key)
 				if err != nil {
 					continue
 				}
@@ -195,9 +225,7 @@ func (c *CacheMonitorImpl) UpdateCache(ctx context.Context, group string, key st
 	}
 }
 
-func (c *CacheMonitorImpl) Close() {
-
-}
+func (c *CacheMonitorImpl) Close() {}
 
 func (c *CacheMonitorImpl) Start(ctx context.Context) {
 	if c.started.Load() {
@@ -216,31 +244,39 @@ func (c *CacheMonitorImpl) Start(ctx context.Context) {
 						_ = c.AddGroupKeys(ctx, key, value)
 					}
 				case group := <-c.deleteGroupQueue:
-					keys, err := c.GetGroupKeys(ctx, group)
-					if err != nil {
-						ctxLogger.Error(ctx, "failed getting group keys")
+					dataInterface, found := c.localCache.Get(group)
+					if !found {
 						continue
 					}
-					c.groupMutex.Lock()
-					for key := range keys {
-						err = DeleteKey(ctx, key)
+					data := dataInterface.(*GroupData)
+					data.mu.Lock()
+					// Create a copy of keys under the lock
+					keysCopy := make(map[string]struct{}, len(data.keys))
+					for key := range data.keys {
+						keysCopy[key] = struct{}{}
+					}
+					// Clear the original keys
+					data.keys = make(map[string]struct{})
+					data.mu.Unlock()
+					c.localCache.Set(group, data, cache.DefaultExpiration)
+
+					for key := range keysCopy {
+						err := DeleteKey(ctx, key)
 						if err != nil {
-							ctxLogger.Info(ctx, "failed getting deleting key", zap.String("group", group), zap.String("key", key))
+							ctxLogger.Info(ctx, "failed deleting key", zap.String("group", group), zap.String("key", key))
 							continue
 						}
 					}
-					c.localCache.Set(group, map[string]struct{}{}, cache.DefaultExpiration)
-					c.groupMutex.Unlock()
-					data, _ := Get[map[string]struct{}](ctx, group, group)
-					if data != nil {
-						for key := range keys {
-							err = DeleteKey(ctx, key)
+
+					dataFromGlobalCache, _ := Get[map[string]struct{}](ctx, group, group)
+					if dataFromGlobalCache != nil {
+						for key := range *dataFromGlobalCache {
+							err := DeleteKey(ctx, key)
 							if err != nil {
 								continue
 							}
 						}
 					}
-
 				}
 			}
 		})
@@ -249,7 +285,5 @@ func (c *CacheMonitorImpl) Start(ctx context.Context) {
 }
 
 func (c *CacheMonitorImpl) Record(ctx context.Context, cmd CacheCmd, status Status) func(err error) {
-	return func(err error) {
-
-	}
+	return func(err error) {}
 }

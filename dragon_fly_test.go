@@ -54,11 +54,11 @@ func TestCacheDragonFly(t *testing.T) {
 	r := redis.NewClient(&redis.Options{
 		Addr: "127.0.0.1:6379",
 	})
-	if nil != r.Ping(ctx) {
+	if nil != r.Ping(ctx).Err() {
 		return
 	}
 	cache := NewRedisCache(r, time.Second*10, "test", true)
-	ctx := ContextWithCache(context.Background(), cache)
+	ctx = ContextWithCache(context.Background(), cache)
 	for _, test := range tests {
 		t.Run(test.Name, func(t *testing.T) {
 			// Set value if provided

@@ -65,12 +65,9 @@ func (c *RedisCache) GetName() string {
 func (c *RedisCache) DeleteKey(ctx context.Context, key string) error {
 	stat, err := c.cacher.Del(ctx, key).Result()
 	if err != nil {
-		ctxLogger.Warn(ctx, "failed deleting redis cache key", zap.String("key", key), zap.Error(err))
 		return fmt.Errorf("failed to delete key %s: %w", key, err)
 	}
-	if stat == 0 {
-		ctxLogger.Info(ctx, "redis key not found for deletion", zap.String("key", key))
-	} else {
+	if stat != 0 {
 		ctxLogger.Debug(ctx, "deleted redis cache key", zap.String("key", key))
 	}
 	return nil

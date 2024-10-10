@@ -1,7 +1,8 @@
 package ctx_cache
 
 import (
-	"github.com/goccy/go-json"
+	"encoding/json"
+	"fmt"
 	"reflect"
 	"strconv"
 )
@@ -23,7 +24,14 @@ func ConvertToBytes(data interface{}) ([]byte, error) {
 	case bool:
 		return strconv.AppendBool(nil, v), nil
 	default:
-		return json.Marshal(data)
+		if data == nil {
+			return nil, nil
+		}
+		b, err := json.Marshal(data)
+		if err != nil {
+			return nil, fmt.Errorf("failed converting data to bytes(%v): %w", data, err)
+		}
+		return b, nil
 	}
 }
 

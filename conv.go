@@ -1,6 +1,7 @@
 package ctx_cache
 
 import (
+	"database/sql"
 	"encoding/json"
 	"fmt"
 	"reflect"
@@ -23,6 +24,26 @@ func ConvertToBytes(data interface{}) ([]byte, error) {
 		return strconv.AppendFloat(nil, v, 'f', -1, 64), nil
 	case bool:
 		return strconv.AppendBool(nil, v), nil
+	case sql.NullString:
+		if v.Valid {
+			return []byte(v.String), nil
+		}
+		return nil, nil
+	case sql.NullInt64:
+		if v.Valid {
+			return strconv.AppendInt(nil, v.Int64, 10), nil
+		}
+		return nil, nil
+	case sql.NullFloat64:
+		if v.Valid {
+			return strconv.AppendFloat(nil, v.Float64, 'f', -1, 64), nil
+		}
+		return nil, nil
+	case sql.NullBool:
+		if v.Valid {
+			return strconv.AppendBool(nil, v.Bool), nil
+		}
+		return nil, nil
 	default:
 		if data == nil {
 			return nil, nil
@@ -65,6 +86,7 @@ func toUint64(data interface{}) uint64 {
 	}
 }
 
+// ConvertBytesToType attempts to convert a []byte to a generic type T
 // ConvertBytesToType attempts to convert a []byte to a generic type T
 func ConvertBytesToType[T any](data []byte) (T, error) {
 	var result T
@@ -125,11 +147,56 @@ func ConvertBytesToType[T any](data []byte) (T, error) {
 		var boolValue bool
 		boolValue, err = strconv.ParseBool(string(data))
 		result = any(boolValue).(T)
+	case "sql.NullString":
+		var nullString sql.NullString
+		if len(data) == 0 {
+			nullString.Valid = false
+		} else {
+			nullString.String = string(data)
+			nullString.Valid = true
+		}
+		result = any(nullString).(T)
+	case "sql.NullInt64":
+		var nullInt64 sql.NullInt64
+		if len(data) == 0 {
+			nullInt64.Valid = false
+		} else {
+			var intValue int64
+			intValue, err = strconv.ParseInt(string(data), 10, 64)
+			nullInt64.Int64 = intValue
+			nullInt64.Valid = err == nil
+		}
+		result = any(nullInt64).(T)
+	case "sql.NullFloat64":
+		var nullFloat64 sql.NullFloat64
+		if len(data) == 0 {
+			nullFloat64.Valid = false
+		} else {
+			var floatValue float64
+			floatValue, err = strconv.ParseFloat(string(data), 64)
+			nullFloat64.Float64 = floatValue
+			nullFloat64.Valid = err == nil
+		}
+		result = any(nullFloat64).(T)
+	case "sql.NullBool":
+		var nullBool sql.NullBool
+		if len(data) == 0 {
+			nullBool.Valid = false
+		} else {
+			var boolValue bool
+			boolValue, err = strconv.ParseBool(string(data))
+			nullBool.Bool = boolValue
+			nullBool.Valid = err == nil
+		}
+		result = any(nullBool).(T)
 	default:
+		if data == nil {
+			return result, nil
+		}
 		// Attempt to unmarshal into the generic type
 		err = json.Unmarshal(data, &result)
 		if err != nil {
-			return result, err
+			return result, fmt.Errorf("failed converting bytes to type(%v): %w", GetTypeReflect[T](), err)
 		}
 	}
 	return result, err

@@ -11,7 +11,6 @@ import (
 	"strings"
 	"time"
 
-	jsoniter "github.com/json-iterator/go"
 	"github.com/patrickmn/go-cache"
 )
 
@@ -123,11 +122,11 @@ func (w Wrapper[T]) Get() interface{} {
 
 func UnmarshalWrappert[T any](data []byte) (*T, error) {
 	var output Wrapper[T]
-	err := jsoniter.Unmarshal(data, &output)
+	err := json.Unmarshal(data, &output)
 	if err != nil {
 		err = json.Unmarshal(data, &output)
 		if err != nil {
-			return nil, err
+			return nil, fmt.Errorf("failed to unmarshal data in UnmarshalWrappert: %w", err)
 		}
 	}
 	return &output.Data, nil

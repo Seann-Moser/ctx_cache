@@ -3,7 +3,7 @@ package ctx_cache
 import (
 	"context"
 	"errors"
-	redis "github.com/go-redis/redis/v8"
+	redis "github.com/redis/go-redis/v9"
 	"strings"
 	"testing"
 	"time"

@@ -9,7 +9,7 @@ import (
 	"go.uber.org/zap"
 	"time"
 
-	"github.com/go-redis/redis/v8"
+	redis "github.com/redis/go-redis/v9"
 	"github.com/spf13/pflag"
 	"github.com/spf13/viper"
 )
@@ -48,7 +48,6 @@ func NewRedisCacheFromFlags(ctx context.Context, prefix string) *RedisCache {
 }
 
 func NewRedisCache(cacher *redis.Client, defaultDuration time.Duration, instance string, enabled bool) *RedisCache {
-
 	return &RedisCache{
 		cacher:          cacher,
 		defaultDuration: defaultDuration,
@@ -56,6 +55,11 @@ func NewRedisCache(cacher *redis.Client, defaultDuration time.Duration, instance
 		enabled:         enabled,
 	}
 }
+
+func (c *RedisCache) GetRedis() redis.Cmdable {
+	return c.cacher
+}
+
 func (c *RedisCache) Close() {
 	_ = c.cacher.Close()
 }
